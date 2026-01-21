@@ -1,0 +1,156 @@
+#include "downstacker.hpp"
+
+#include "block.hpp"
+
+#include <algorithm>
+#include <ranges>
+
+struct RNG {
+public:
+    RNG() {        
+        PPTRNG = std::random_device()();
+
+        makebag();
+    }
+    uint32_t PPTRNG{};
+    std::array<char, 7> bag;
+    uint8_t bagiterator;
+
+    inline char getPiece() {
+        if (bagiterator == 7) {
+            makebag();
+        }
+        return bag[bagiterator++];
+    }
+
+    inline uint32_t getRand(uint32_t upperBound) {
+        PPTRNG = PPTRNG * 0x5d588b65 + 0x269ec3;
+        uint32_t uVar1 = PPTRNG >> 0x10;
+        if (upperBound != 0) {
+            uVar1 = uVar1 * upperBound >> 0x10;
+        }
+        return uVar1;
+    }
+
+    inline void makebag() {
+        bagiterator = 0;
+        uint32_t buffer = 0;
+
+        std::array<char, 7> pieces = {
+            'S',
+            'Z',
+            'J',
+            'L',
+            'T',
+            'O',
+            'I'};
+
+        for (int_fast8_t i = 6; i >= 0; i--) {
+            buffer = getRand(i + 1);
+            bag[i] = pieces[buffer];
+            std::swap(pieces[buffer], pieces[i]);
+        }
+    }
+
+    inline void new_seed() {
+        PPTRNG = std::random_device()();
+    }
+};
+
+struct Node {
+    RNG rng;
+    Board board;
+    std::array<char, 5> queue;
+    Piece root_piece;
+    double eval_score;
+    double line_clear_eval;
+    char hold;
+};
+
+Piece bot_downstacker(Board board, int meter, int combo, std::array<char, 5> queue) {
+
+    ColBoard column_board = ColBoard::convert(board);
+
+
+    std::vector<Node> games = { Node{RNG(), board, queue, {' '}, std::numeric_limits<double>::min(), 0, ' '} };
+	std::vector<Node> next_games;
+
+    using namespace reachability;
+
+    auto go = [&](Node& node, bool held, bool set_root_piece = false) {
+        char current_piece = held ? node.queue[0] : (node.hold == ' ' ? node.queue[1] : node.hold);
+        bool first_hold = node.hold == ' ' && held;
+
+        blocks::call_with_block<blocks::SRS>(current_piece, [&]<block B>() {
+            auto moves = search::binary_bfs<blocks::SRS, coord{4,20}, 0uz>(node.board, current_piece);
+            static_for<B.SHAPES>([&](auto rot) {
+                static_for<Board::width>([&](auto x) {
+                    static_for<Board::height>([&](auto y) {
+                        if(moves[rot].template get<x,y>()) {
+                            Node n = node;
+                            static_for<B.BLOCK_PER_MINO>([&](const std::size_t mino_i) {
+                                int px = x + B.minos[rot][mino_i][0];
+                                int py = y + B.minos[rot][mino_i][1];
+                                n.board.set(px, py);
+                            });
+                            int lines_cleared = n.board.clear_full_lines();
+                            if(held && !first_hold) {
+                                std::swap(n.hold, n.queue[0]);
+                            } else if(first_hold) {
+                                n.hold = n.queue[0];
+                                std::shift_left(n.queue.begin(), n.queue.end(), 1);
+                                n.queue.back() = n.rng.getPiece();
+                            }
+                            std::shift_left(n.queue.begin(), n.queue.end(), 1);
+                            n.queue.back() = n.rng.getPiece();
+
+                            n.eval_score = ColBoard::convert(n.board).evaluate(lines_cleared);
+                            node.line_clear_eval += (node.line_clear_eval == 4) / 10.0;
+                            if(set_root_piece) {
+                                n.root_piece = Piece{
+                                    .t = current_piece, 
+                                    .x = x,
+                                    .y = y,
+                                    .rot = rot
+                                };
+                            }
+                            next_games.push_back(n);
+                        }
+                    });
+                });
+            });
+        });
+    };
+
+    constexpr int beam_depth = 4;
+    constexpr size_t beam_width = 300;
+
+    go(games.front(), true, true);
+    go(games.front(), false, true);
+    std::swap(games, next_games);
+    next_games.clear();
+
+	for (int depth = 1; depth < beam_depth; depth++) {
+
+		if (games.size() > beam_width) {
+			std::ranges::nth_element(games, games.begin() + beam_width, std::greater{}, &Node::eval_score);
+
+			auto threshold = games[beam_width].eval_score + games[beam_width].line_clear_eval;
+
+			std::ranges::partition(games, [threshold](const auto& a) {
+				// assume all the games have been evaluated
+				return a.eval_score + a.line_clear_eval > threshold;
+			});
+
+			games.erase(games.begin() + beam_width, games.end());
+		}
+        for(auto& game : games) {
+            go(game, false);
+            go(game, true);
+        }
+        std::swap(games, next_games);
+        next_games.clear();
+    }
+
+    return games.front().root_piece;
+}
