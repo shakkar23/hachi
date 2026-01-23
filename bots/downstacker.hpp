@@ -6,5 +6,6 @@
 #include "search.hpp"
 
 #include <random>
+#include <span>
 
-Piece bot_downstacker(Board board, int meter, int combo, std::array<char, 5> queue);
+Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold);

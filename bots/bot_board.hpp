@@ -13,7 +13,7 @@ struct ColBoard {
 
     static inline ColBoard convert(Board board) {
         ColBoard ret{};
-        reachability::static_for<Board::width>([&](auto y) {
+        reachability::static_for<Board::height>([&](auto y) {
             reachability::static_for<Board::width>([&](auto x) {
                 if (board.get<x,y>())
                     ret.set(x,y);
@@ -70,13 +70,12 @@ struct ColBoard {
 
     inline  bool is_perfect_clear() const {
 
-        bool ret = true;
+        bool ret = false;
 
         for (size_t x = 0; x < Board::width; x++) {
-            if (data[x])
-                ret = false;
+            ret |= !!data[x];
         }
-        return ret;
+        return !ret;
     }
 
     inline std::pair<int, int> cavities_overhangs() const {
@@ -298,32 +297,32 @@ struct ColBoard {
 
     private:
     std::array<uint32_t, Board::width> data;
-
-        [[maybe_unused]] constexpr static auto top_half = -130.0;
-        [[maybe_unused]] constexpr static auto top_quarter = -499.0;
-        [[maybe_unused]] constexpr static auto low = -50.0;
-        [[maybe_unused]] constexpr static auto cavity_cells = -176.0;
-        [[maybe_unused]] constexpr static auto cavity_cells_sq = -6.0;
-        [[maybe_unused]] constexpr static auto overhangs = -47.0;
-        [[maybe_unused]] constexpr static auto overhangs_sq = -9.0;
-        [[maybe_unused]] constexpr static auto covered_cells = -26.0;
-        [[maybe_unused]] constexpr static auto covered_cells_sq = 1.0;
-        [[maybe_unused]] constexpr static auto bumpiness = -7.0;
-        [[maybe_unused]] constexpr static auto bumpiness_sq = -28.0;
-        [[maybe_unused]] constexpr static auto height = -46.0;
-        [[maybe_unused]] constexpr static float well_columns[10] = { 31, 16, -41, 37, 49, 30, 56, 48, -27, 22 };
-        [[maybe_unused]] constexpr static float clears[5] = { 0, -1700, -100, -50, 490 };
-        [[maybe_unused]] constexpr static float tspins[4] = { 0, 126, 434, 220 };
-        [[maybe_unused]] constexpr static float perfect_clear = 200.0;
-        [[maybe_unused]] constexpr static float wasted_t = -52.0;
-        [[maybe_unused]] constexpr static float tsd_shape = 180.0;
-        [[maybe_unused]] constexpr static float well_depth = 91.0; // todo
-        [[maybe_unused]] constexpr static float max_well_depth = 17.0; // todo
-        [[maybe_unused]] constexpr static float row_transitions = -5.0;
-        [[maybe_unused]] constexpr static float donuts = -10.0;
-        [[maybe_unused]] constexpr static float v_shape = 50.0;
-        [[maybe_unused]] constexpr static float s_shape = 80.0;
-        [[maybe_unused]] constexpr static float l_shape = 80.0;
-        [[maybe_unused]] constexpr static float l2_shape = 80.0;
-        [[maybe_unused]] constexpr static float counting = 50.0;
+    public:
+    [[maybe_unused]] constexpr static auto top_half = -130.0;
+    [[maybe_unused]] constexpr static auto top_quarter = -499.0;
+    [[maybe_unused]] constexpr static auto low = -50.0;
+    [[maybe_unused]] constexpr static auto cavity_cells = -176.0;
+    [[maybe_unused]] constexpr static auto cavity_cells_sq = -6.0;
+    [[maybe_unused]] constexpr static auto overhangs = -47.0;
+    [[maybe_unused]] constexpr static auto overhangs_sq = -9.0;
+    [[maybe_unused]] constexpr static auto covered_cells = -26.0;
+    [[maybe_unused]] constexpr static auto covered_cells_sq = 1.0;
+    [[maybe_unused]] constexpr static auto bumpiness = -7.0;
+    [[maybe_unused]] constexpr static auto bumpiness_sq = -28.0;
+    [[maybe_unused]] constexpr static auto height = -46.0;
+    [[maybe_unused]] constexpr static float well_columns[10] = { 31, 16, -41, 37, 49, 30, 56, 48, -27, 22 };
+    [[maybe_unused]] constexpr static float clears[5] = { 0, -1700, -100, -50, 490 };
+    [[maybe_unused]] constexpr static float tspins[4] = { 0, 126, 434, 220 };
+    [[maybe_unused]] constexpr static float perfect_clear = 200.0;
+    [[maybe_unused]] constexpr static float wasted_t = -52.0;
+    [[maybe_unused]] constexpr static float tsd_shape = 180.0;
+    [[maybe_unused]] constexpr static float well_depth = 91.0; // todo
+    [[maybe_unused]] constexpr static float max_well_depth = 17.0; // todo
+    [[maybe_unused]] constexpr static float row_transitions = -5.0;
+    [[maybe_unused]] constexpr static float donuts = -10.0;
+    [[maybe_unused]] constexpr static float v_shape = 50.0;
+    [[maybe_unused]] constexpr static float s_shape = 80.0;
+    [[maybe_unused]] constexpr static float l_shape = 80.0;
+    [[maybe_unused]] constexpr static float l2_shape = 80.0;
+    [[maybe_unused]] constexpr static float counting = 50.0;
 };

@@ -22,3 +22,4 @@ add_executable(bot_tester "test/test.cpp")
 
 target_link_libraries(bot_tester PRIVATE bot_downstacker)
 set_property(TARGET bot_tester PROPERTY CXX_STANDARD 23)
+#add_compile_options(TARGET bot_tester PRIVATE -march=native -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer)
