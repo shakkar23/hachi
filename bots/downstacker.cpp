@@ -46,7 +46,7 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
 
     using namespace reachability;
 
-    auto go = [&](const Node& node, bool held, bool set_root_piece = false) {
+    auto go = [](std::vector<Node> &next_games, const Node& node, bool held, bool set_root_piece = false) {
         char current_piece = held ? node.queue[0] : (node.hold == ' ' ? node.queue[1] : node.hold);
         bool first_hold = node.hold == ' ' && held;
 
@@ -74,8 +74,8 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
                             n.queue.back() = n.rng.getPiece();
                             
                             int lines_cleared = n.board.clear_full_lines();
-                            n.eval_score = ColBoard::convert(n.board).evaluate(lines_cleared) + ColBoard::clears[lines_cleared];
-
+                            n.eval_score = ColBoard::convert(n.board).evaluate(lines_cleared);
+                            n.line_clear_eval += std::array{-200,200,250,400,700}[lines_cleared];
                             if(set_root_piece) {
                                 n.root_piece = Piece{
                                     .t = current_piece, 
@@ -93,8 +93,8 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
     };
 
 
-    go(games.front(), true, true);
-    go(games.front(), false, true);
+    go(next_games, games.front(), true, true);
+    go(next_games, games.front(), false, true);
     std::swap(games, next_games);
     next_games.clear();
 
@@ -115,8 +115,8 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
 			games.erase(games.begin() + beam_width, games.end());
 		}
         for(auto& game : games) {
-            go(game, false);
-            go(game, true);
+            go(next_games, game, false);
+            go(next_games, game, true);
         }
         std::swap(games, next_games);
         next_games.clear();
