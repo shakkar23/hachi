@@ -1,9 +1,11 @@
 #include "downstacker.hpp"
 
 #include "block.hpp"
+#include "search.hpp"
 
 #include "util/rng.hpp"
 
+#include <random>
 #include <algorithm>
 #include <ranges>
 #include <cassert>
@@ -125,7 +127,7 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t 
     std::swap(games, next_games);
     next_games.clear();
 
-	for (int depth = 0; depth < std::min(beam_depth, queue.size()); depth++) {
+	for (int depth = 0; depth < std::min(beam_depth, queue.size()-1); depth++) {
 
 		if (games.size() > beam_width) {
 			std::ranges::nth_element(games, games.begin() + beam_width, [](auto& l, auto& r) {
@@ -158,7 +160,7 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t 
 
     Piece best_root_piece{ ' ',0,0,0 };
     
-    if(!games.empty() && queue.size() < beam_depth) {
+    if(!games.empty() && queue.size()-1 < beam_depth) {
         std::ranges::nth_element(games, games.begin(), [](auto& l, auto& r) {
             return l.eval_score + l.line_clear_eval > r.eval_score + r.line_clear_eval;
         });
@@ -172,18 +174,25 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t 
         std::vector<Node> speculation_games = games;
         { // make all the rngs the same here
             RNG base_rng = RNG(bag);
-            std::array<char, queue.size()> next_queue;
-            for(auto &q : next_queue) {
-                q = base_rng.getPiece();
-            }
             for(auto &game : speculation_games) {
                 game.rng = base_rng;
-                game.queue = next_queue;
+
+                // no hold has happened yet
+                if(hold == ' ') {
+                    game.queue[0] = game.queue.back();
+                    for(int i = 1; i < game.queue.size(); ++i) {
+                        game.queue[i] = game.rng.getPiece();
+                    }
+                } else {
+                    for(int i = 0; i < game.queue.size(); ++i) {
+                        game.queue[i] = game.rng.getPiece();
+                    }
+                }
             }
         }
         std::unordered_map<uint32_t, double> max_map;
         
-        for(int depth = queue.size(); depth < beam_depth; depth++) {
+        for(int depth = queue.size()-1; depth < beam_depth; depth++) {
 
             if(speculation_games.size() > beam_width) {
                 std::ranges::nth_element(speculation_games, speculation_games.begin() + beam_width, [](auto& l, auto& r) {
