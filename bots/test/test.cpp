@@ -110,7 +110,7 @@ void benchmark_downstacker(int num_sims, float piece_per_garbage, int max_sim_le
             auto queue_ptr = queue.begin() + current_piece_index;
             
             auto now = std::chrono::high_resolution_clock::now();
-            auto piece = bot_downstacker(board, std::span<char,5>(queue_ptr, queue_ptr + 5), hold, bag, 10, 1000);
+            auto piece = bot_downstacker(board, std::span<char,5>(queue_ptr, queue_ptr + 5), hold, bag, 10, 1000, 1);
             auto after = std::chrono::high_resolution_clock::now();
             total_time = total_time + after - now;
 
@@ -244,7 +244,7 @@ int l() {
     std::array queue = {'S','Z','T','L','O'};
     auto now = std::chrono::high_resolution_clock::now();
     for(int i =0; i < 10'000; i++)
-        bot_downstacker(Board{}, std::span<char,5>{queue}, ' ', 0b1111111, 5,300);
+        bot_downstacker(Board{}, std::span<char,5>{queue}, ' ', 0b1111111, 5,300, 2);
     auto after = std::chrono::high_resolution_clock::now();
     std::println("{}", std::chrono::duration<double, std::ratio<1,1000>>(after - now));
     return 0;

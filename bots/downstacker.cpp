@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <ranges>
 #include <cassert>
+#include <unordered_map>
 
 struct Node {
     Board board;
@@ -49,7 +50,7 @@ constexpr static int first_empty_row_from_bottom(Board board) {
     return -1;  // All rows have at least one occupied cell
 }
 
-Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t bag, int beam_depth, size_t beam_width) {
+Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t bag, size_t beam_depth, size_t beam_width, size_t speculation_split_size) {
 
     std::array<char,5> real_queue;
     for(size_t i = 0; i < queue.size(); i++) {
@@ -119,13 +120,12 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t 
         });
     };
 
-
-    go(next_games, games.front(), true, true);
     go(next_games, games.front(), false, true);
+    go(next_games, games.front(), true, true);
     std::swap(games, next_games);
     next_games.clear();
 
-	for (int depth = 1; depth < beam_depth; depth++) {
+	for (int depth = 0; depth < std::min(beam_depth, queue.size()); depth++) {
 
 		if (games.size() > beam_width) {
 			std::ranges::nth_element(games, games.begin() + beam_width, [](auto& l, auto& r) {
@@ -135,7 +135,6 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t 
 			auto threshold = games[beam_width].eval_score + games[beam_width].line_clear_eval;
 
 			std::ranges::partition(games, [threshold](const auto& a) {
-				// assume all the games have been evaluated
 				return a.eval_score + a.line_clear_eval > threshold;
 			});
 
@@ -148,14 +147,79 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t 
         std::swap(games, next_games);
         next_games.clear();
     }
+
+
+    auto pack_piece = [](Piece piece) {
+        return  (uint32_t)piece.t << 0 |
+                (uint32_t)piece.x << 8 |
+                (uint32_t)piece.y << 16 |
+                (uint32_t)piece.rot << 24;
+    };
+
+    Piece best_root_piece{ ' ',0,0,0 };
     
-    if(games.empty()) {
-        return Piece{' ',0,0,0};
+    if(!games.empty() && queue.size() < beam_depth) {
+        std::ranges::nth_element(games, games.begin(), [](auto& l, auto& r) {
+            return l.eval_score + l.line_clear_eval > r.eval_score + r.line_clear_eval;
+        });
+        best_root_piece = games.front().root_piece;
     }
 
-    std::ranges::nth_element(games, games.begin(), [](auto& l, auto& r) {
-        return l.eval_score + l.line_clear_eval > r.eval_score + r.line_clear_eval;
-    });
+    std::unordered_map<uint32_t, double> avg_map;
+    double best_avg_score = std::numeric_limits<double>::min();
 
-    return games.front().root_piece;
+    for(int i = 0; i < speculation_split_size; ++i) {
+        std::vector<Node> speculation_games = games;
+        { // make all the rngs the same here
+            RNG base_rng = RNG(bag);
+            std::array<char, queue.size()> next_queue;
+            for(auto &q : next_queue) {
+                q = base_rng.getPiece();
+            }
+            for(auto &game : speculation_games) {
+                game.rng = base_rng;
+                game.queue = next_queue;
+            }
+        }
+        std::unordered_map<uint32_t, double> max_map;
+        
+        for(int depth = queue.size(); depth < beam_depth; depth++) {
+
+            if(speculation_games.size() > beam_width) {
+                std::ranges::nth_element(speculation_games, speculation_games.begin() + beam_width, [](auto& l, auto& r) {
+                    return l.eval_score + l.line_clear_eval > r.eval_score + r.line_clear_eval;
+                });
+
+                auto threshold = speculation_games[beam_width].eval_score + speculation_games[beam_width].line_clear_eval;
+
+                std::ranges::partition(speculation_games, [threshold](const auto& a) {
+                    return a.eval_score + a.line_clear_eval > threshold;
+                });
+
+                speculation_games.erase(speculation_games.begin() + beam_width, speculation_games.end());
+            }
+            for(auto& game : speculation_games) {
+                go(next_games, game, false);
+                go(next_games, game, true);
+            }
+            std::swap(speculation_games, next_games);
+            next_games.clear();
+        }
+
+
+        for(auto& game : speculation_games) {
+            uint32_t packed_piece = pack_piece(game.root_piece);
+
+            max_map[packed_piece] = std::max(max_map[packed_piece], game.eval_score + game.line_clear_eval);
+
+            avg_map[packed_piece] = avg_map[packed_piece] + max_map[packed_piece];
+
+            if(avg_map[packed_piece] > best_avg_score) {
+                best_root_piece = game.root_piece;
+                best_avg_score = avg_map[packed_piece];
+            }
+        }
+    }
+    
+    return best_root_piece;
 }
