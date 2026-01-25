@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cassert>
 #include <algorithm>
+#include <chrono>
 #include <charconv>
 
 
@@ -49,10 +50,12 @@ Stats calculate_stats(const std::vector<int>& data) {
 void benchmark_downstacker(int num_sims, int piece_per_garbage, int max_sim_length) {
     RNG rng;
     std::vector<int> length_of_sims;
-    length_of_sims.reserve(num_sims + 5 + 1);
+    length_of_sims.reserve(num_sims);
     
     std::vector<char> queue;
     queue.resize(max_sim_length + 5 + 1, ' ');
+    std::chrono::duration<double, std::ratio<1, 1000>> total_time{};
+
     for(const auto _ : std::views::iota(0,num_sims)) {
         Board board{};
         char hold = ' ';
@@ -72,8 +75,11 @@ void benchmark_downstacker(int num_sims, int piece_per_garbage, int max_sim_leng
             assert(std::distance(queue.begin() + current_piece_index, queue.end()) > 0);
             
             auto queue_ptr = queue.begin() + current_piece_index;
-            auto piece = bot_downstacker(board, std::span<char,5>(queue_ptr, queue_ptr + 5), hold);
             
+            auto now = std::chrono::high_resolution_clock::now();
+            auto piece = bot_downstacker(board, std::span<char,5>(queue_ptr, queue_ptr + 5), hold);
+            auto after = std::chrono::high_resolution_clock::now();
+            total_time = total_time + after - now;
             // dead or gave up
             if(piece.t == ' ') {
                 break;
@@ -100,12 +106,23 @@ void benchmark_downstacker(int num_sims, int piece_per_garbage, int max_sim_leng
             current_piece_index++;
             
             if(sim_length % piece_per_garbage == 0) {
-                
+                board = board.move < reachability::coord{ 0,1 } > ();
+
+                Board single_garbage{};
+                auto x = rng.getRand(10);
+
+                for(int i = 0; i < 10; ++i) {
+                    if(i != x) {
+                        single_garbage.set(i, 0);
+                    }
+                }
+
+                board |= single_garbage;
             }
-            std::println("{}", to_string(board));
+            // std::println("{}", to_string(board));
 
         }
-        std::println("finished {}: {}", _, sim_length);
+        // std::println("finished {}: {}", _, sim_length);
         length_of_sims.push_back(sim_length);
         sim_length = 0;
     }
@@ -114,9 +131,12 @@ void benchmark_downstacker(int num_sims, int piece_per_garbage, int max_sim_leng
     std::println("stdDev = {}", stats.stdDev);
     std::println("min = {}", stats.min);
     std::println("max = {}", stats.max);
+    std::println("total = {}", std::accumulate(length_of_sims.begin(), length_of_sims.end(), 0));
+    std::println("time = {}", total_time);
 }
 
-std::array<const char*,4> backup_params = {NULL,"100","10","300"};
+std::array<const char*,4> backup_params = {NULL,"100","3","300"};
+
 int main(int argc, const char** argv) {
     if(argc < 4) {
         std::println("usage: program num_sims piece_per_garbage max_sim_length");
@@ -171,15 +191,11 @@ int main(int argc, const char** argv) {
     benchmark_downstacker(num_sims, piece_per_garbage, max_sim_length);
     return 0;
 }
-#include <chrono>
 int l() {
     std::array queue = {'S','Z','T','L','O'};
     auto now = std::chrono::high_resolution_clock::now();
-    bot_downstacker(Board{}, std::span<char,5>{queue}, ' ');
-    bot_downstacker(Board{}, std::span<char,5>{queue}, ' ');
-    bot_downstacker(Board{}, std::span<char,5>{queue}, ' ');
-    bot_downstacker(Board{}, std::span<char,5>{queue}, ' ');
-    bot_downstacker(Board{}, std::span<char,5>{queue}, ' ');
+    for(int i =0; i < 10'000; i++)
+        bot_downstacker(Board{}, std::span<char,5>{queue}, ' ');
     auto after = std::chrono::high_resolution_clock::now();
     std::println("{}", std::chrono::duration<double, std::ratio<1,1000>>(after - now));
     return 0;

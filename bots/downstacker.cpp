@@ -19,8 +19,8 @@ struct Node {
 };
 
 Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
-    constexpr int beam_depth = 4;
-    constexpr size_t beam_width = 100;
+    constexpr int beam_depth = 5;
+    constexpr size_t beam_width = 150;
 
     ColBoard column_board = ColBoard::convert(board);
 
@@ -74,8 +74,8 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
                             n.queue.back() = n.rng.getPiece();
                             
                             int lines_cleared = n.board.clear_full_lines();
-                            n.eval_score = ColBoard::convert(n.board).evaluate(lines_cleared);
-                            n.line_clear_eval += std::array{-200,200,250,400,700}[lines_cleared];
+                            n.eval_score = n.board.first_empty_row_from_bottom();
+                            n.line_clear_eval += std::array{-100,200,300,400,2000}[lines_cleared];
                             if(set_root_piece) {
                                 n.root_piece = Piece{
                                     .t = current_piece, 
