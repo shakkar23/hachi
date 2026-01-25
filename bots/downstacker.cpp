@@ -18,11 +18,38 @@ struct Node {
     char hold;
 };
 
-Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
-    constexpr int beam_depth = 5;
-    constexpr size_t beam_width = 150;
 
-    ColBoard column_board = ColBoard::convert(board);
+constexpr static int first_empty_row_from_bottom(Board board) {
+    // Iterate through underlying integers from last to first
+    for(int i = Board::last; i >= 0; --i) {
+        uint64_t chunk = board.get_under(i);
+
+        // For each row in this chunk (from bottom to top)
+        for(int row_in_chunk = 0; row_in_chunk < Board::lines_per_under; ++row_in_chunk) {
+            int y = i * Board::lines_per_under + (Board::lines_per_under - row_in_chunk - 1);
+
+            // Skip if we're beyond actual height
+            if(y >= Board::height) continue;
+
+            // Create mask for this specific row
+            uint64_t row_mask = (uint64_t(1) << Board::width) - 1;  // W ones
+            row_mask <<= (row_in_chunk * Board::width);
+
+            // For the last chunk, we might have partial rows
+            if(i == Board::last && row_in_chunk >= (Board::height % Board::lines_per_under)) {
+                continue;  // This row doesn't exist
+            }
+
+            // Check if this row is completely empty
+            if((chunk & row_mask) == 0) {
+                return y;
+            }
+        }
+    }
+    return -1;  // All rows have at least one occupied cell
+}
+
+Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t bag, int beam_depth, size_t beam_width) {
 
     std::array<char,5> real_queue;
     for(size_t i = 0; i < queue.size(); i++) {
@@ -33,7 +60,7 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
             .board = board,
             .eval_score = std::numeric_limits<double>::min(),
             .line_clear_eval = 0,
-            .rng = RNG(),
+            .rng = RNG(bag),
             .queue = real_queue,
             .root_piece = {' ',4,20,0},
             .hold = hold
@@ -74,7 +101,7 @@ Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold) {
                             n.queue.back() = n.rng.getPiece();
                             
                             int lines_cleared = n.board.clear_full_lines();
-                            n.eval_score = n.board.first_empty_row_from_bottom();
+                            n.eval_score = first_empty_row_from_bottom(n.board);
                             n.line_clear_eval += std::array{-100,200,300,400,2000}[lines_cleared];
                             if(set_root_piece) {
                                 n.root_piece = Piece{

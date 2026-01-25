@@ -5,7 +5,7 @@ include(FetchContent)
 FetchContent_Declare(
 	fast_reachability
 	GIT_REPOSITORY https://github.com/shakkar23/fast-reachability.git
-	GIT_TAG 5394322bc459a0565731eadb1f939bccc64b8b61
+	GIT_TAG 7285c5741648ce09e81fb8b7b66142258834e05c
 )
 	
 FetchContent_MakeAvailable(fast_reachability Fast_Reachability)

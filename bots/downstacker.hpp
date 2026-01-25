@@ -7,5 +7,6 @@
 
 #include <random>
 #include <span>
+#include <cstdint>
 
-Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold);
+Piece bot_downstacker(Board board, std::span<char, 5> queue, char hold, uint8_t bag, int beam_depth, size_t beam_width);

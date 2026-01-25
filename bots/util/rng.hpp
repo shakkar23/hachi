@@ -4,7 +4,33 @@
 
 struct RNG {
 public:
-    RNG() {        
+    RNG(const uint8_t bag_mask) {
+        PPTRNG = std::random_device()();
+
+        bag = std::array{
+            'S',
+            'Z',
+            'J',
+            'L',
+            'T',
+            'O',
+            'I' };
+
+        uint32_t buffer = 6;
+        
+        for(int i = 0; i < 7; i++) {
+            if(bag_mask & (1 << i)) continue;
+
+            std::swap(bag[buffer], bag[i]);
+            buffer--;
+        }
+
+        for(int i = buffer; i >= 0; i--) {
+            std::swap(bag[getRand(i + 1)], bag[i]);
+        }
+        bagiterator = 6 - buffer;
+    }
+    RNG() {
         PPTRNG = std::random_device()();
 
         makebag();
