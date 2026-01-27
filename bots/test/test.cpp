@@ -1,4 +1,5 @@
 #include "../downstacker.hpp"
+#include "../comboer.hpp"
 #include "util/rng.hpp"
 
 #include <print>
@@ -132,7 +133,7 @@ void benchmark_downstacker(int num_sims, float piece_per_garbage, int max_sim_le
             bool first_hold = hold == ' ' && held;
             
             if(held and !first_hold) {
-                hold = piece.t;
+                hold = queue[current_piece_index];
             } else if(first_hold) {
                 hold = piece.t;
 
@@ -184,7 +185,149 @@ void benchmark_downstacker(int num_sims, float piece_per_garbage, int max_sim_le
     std::println("time = {}", total_time);
 }
 
-std::array<const char*,4> backup_params = {NULL,"20","1.5","800"};
+void inf_4w(int num_sims, int max_sim_length) {
+
+    RNG rng;
+    std::vector<int> length_of_sims;
+    length_of_sims.reserve(num_sims);
+    
+    std::vector<char> queue;
+    queue.resize(max_sim_length + 5 + 1, ' ');
+    std::chrono::duration<double, std::ratio<1, 1000>> total_time{};
+    
+    for(const auto _ : std::views::iota(0,num_sims)) {
+        // format is backwards
+        Board board{
+            "          "
+            "          "
+            "          "
+            "          "
+            "          "
+            "          "
+            "          "
+            "          "
+            "          "
+            "          "
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXX    XXX"
+            "XXXXX  XXX"
+            "XXXX   XXX"
+        };
+        std::println("{}", to_string(board));
+
+        char hold = ' ';
+        uint8_t bag = 0b1111111;
+
+        rng.makebag();
+        for(auto& piece : queue) {
+            piece = rng.getPiece();
+        }
+        for(int i = 0; i < 5; ++i) {
+            bag &= ~(1 << type_to_int(queue[i]));
+
+            if(bag == 0) {
+                bag = 0b1111111;
+            }
+        }
+        
+        int sim_length = 0;
+        float garbage_acc = 0.0f;
+        int current_piece_index = 0;
+
+        while(true) {
+            if(sim_length >= max_sim_length)
+                break;
+            sim_length++;
+            garbage_acc += 1.0f;
+
+            assert(std::distance(queue.begin() + current_piece_index, queue.end()) > 0);
+            
+            auto queue_ptr = queue.begin() + current_piece_index;
+            
+            auto now = std::chrono::high_resolution_clock::now();
+            auto piece = bot_comboer(board, std::span<char,5>(queue_ptr, queue_ptr + 5), hold, bag, 10, 2);
+            auto after = std::chrono::high_resolution_clock::now();
+            total_time = total_time + after - now;
+
+            // dead or gave up
+            if(piece.t == ' ') {
+                break;
+            }
+            
+            reachability::blocks::call_with_block<reachability::blocks::SRS>(piece.t, [&]<reachability::block B>() {
+                reachability::static_for<B.BLOCK_PER_MINO>([&](const std::size_t mino_i) {
+                    int px = piece.x + B.minos[piece.rot][mino_i][0];
+                    int py = piece.y + B.minos[piece.rot][mino_i][1];
+                    board.set(px, py);
+                });
+            });
+            board.clear_full_lines();
+            
+            bool held = piece.t != queue[sim_length - 1];
+            bool first_hold = hold == ' ' && held;
+            
+            if(held and !first_hold) {
+                hold = queue[current_piece_index];
+            } else if(first_hold) {
+                hold = piece.t;
+
+                bag &= ~(1 << type_to_int(queue[current_piece_index + 5]));
+
+                if(bag == 0) {
+                    bag = 0b1111111;
+                }
+                current_piece_index++;
+            }
+
+            bag &= ~(1 << type_to_int(queue[current_piece_index+5]));
+
+            if(bag == 0) {
+                bag = 0b1111111;
+            }
+            
+            current_piece_index++;
+            
+            board.set<0,22>();
+            board.set<1,22>();
+            board.set<2,22>();
+            board.set<7,22>();
+            board.set<8,22>();
+            board.set<9,22>();
+            std::println("{}", to_string(board));
+            //std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+        // std::println("finished {}: {}", _, sim_length);
+        length_of_sims.push_back(sim_length);
+        sim_length = 0;
+    }
+    auto stats = calculate_stats(length_of_sims);
+    std::println("average = {}", stats.average);
+    std::println("stdDev = {}", stats.stdDev);
+    std::println("min = {}", stats.min);
+    std::println("max = {}", stats.max);
+    std::println("total = {}", std::accumulate(length_of_sims.begin(), length_of_sims.end(), 0));
+    std::println("time = {}", total_time);
+}
+
+std::array<const char*,4> backup_params = {NULL,"3","1.5","200"};
 
 int main(int argc, const char** argv) {
     if(argc < 4) {
@@ -237,7 +380,7 @@ int main(int argc, const char** argv) {
         return 1;
     }
     
-    benchmark_downstacker(num_sims, piece_per_garbage, max_sim_length);
+    inf_4w(num_sims, max_sim_length);
     return 0;
 }
 int l() {
