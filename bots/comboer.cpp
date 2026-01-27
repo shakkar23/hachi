@@ -22,7 +22,7 @@ Piece bot_comboer(const Board board, const std::span<char, 5> queue, const char 
 
     std::array<char,5> real_queue;
     for(size_t i = 0; i < queue.size(); i++) {
-        real_queue.at(i) = queue[i];
+        real_queue[i] = queue[i];
     }
     std::vector<Node> games = {
         Node{
@@ -64,7 +64,7 @@ Piece bot_comboer(const Board board, const std::span<char, 5> queue, const char 
                             std::swap(n.hold, n.queue[0]);
                         } else if(first_hold) {
                             n.hold = n.queue[0];
-        std::copy(n.queue.begin() + 1, n.queue.end(), n.queue.begin());
+                            std::shift_left(n.queue.begin(), n.queue.end(), 1);
                             n.queue.back() = n.rng.getPiece();
                         }
                         std::shift_left(n.queue.begin(), n.queue.end(), 1);
