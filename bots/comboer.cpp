@@ -22,7 +22,7 @@ Piece bot_comboer(const Board board, const std::span<char, 5> queue, const char 
 
     std::array<char,5> real_queue;
     for(size_t i = 0; i < queue.size(); i++) {
-        real_queue[i] = queue[i];
+        real_queue.at(i) = queue[i];
     }
     std::vector<Node> games = {
         Node{
@@ -40,7 +40,7 @@ Piece bot_comboer(const Board board, const std::span<char, 5> queue, const char 
 
     using namespace reachability;
 
-    auto go = [](std::vector<Node> &next_games, const Node node, bool held, bool set_root_piece = false) {
+    auto go = [next_games](const Node node, bool held, bool set_root_piece = false) mutable {
         char current_piece = held ? node.queue[0] : (node.hold == ' ' ? node.queue[1] : node.hold);
         bool first_hold = node.hold == ' ' && held;
 
@@ -64,7 +64,7 @@ Piece bot_comboer(const Board board, const std::span<char, 5> queue, const char 
                             std::swap(n.hold, n.queue[0]);
                         } else if(first_hold) {
                             n.hold = n.queue[0];
-                            std::shift_left(n.queue.begin(), n.queue.end(), 1);
+        std::copy(n.queue.begin() + 1, n.queue.end(), n.queue.begin());
                             n.queue.back() = n.rng.getPiece();
                         }
                         std::shift_left(n.queue.begin(), n.queue.end(), 1);
@@ -89,8 +89,8 @@ Piece bot_comboer(const Board board, const std::span<char, 5> queue, const char 
         }
     };
 
-    go(next_games, games.front(), false, true);
-    go(next_games, games.front(), true, true);
+    go(games.front(), false, true);
+    go(games.front(), true, true);
 
     if(next_games.empty()) {
         return games.front().root_piece;
@@ -100,9 +100,9 @@ Piece bot_comboer(const Board board, const std::span<char, 5> queue, const char 
 
 	for (int depth = 0; depth < std::min(beam_depth, queue.size()-1); depth++) {
 
-        for(auto& game : games) {
-            go(next_games, game, false);
-            go(next_games, game, true);
+        for(auto game : games) {
+            go(game, false);
+            go(game, true);
         }
         if(next_games.empty()) {
             return games.front().root_piece;
@@ -155,8 +155,8 @@ Piece bot_comboer(const Board board, const std::span<char, 5> queue, const char 
         for(;depth < beam_depth; depth++) {
 
             for(auto& game : speculation_games) {
-                go(next_games, game, false);
-                go(next_games, game, true);
+                go(game, false);
+                go(game, true);
             }
             if(next_games.empty()) {
                 break;
