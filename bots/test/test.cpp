@@ -188,6 +188,8 @@ void benchmark_downstacker(int num_sims, float piece_per_garbage, int max_sim_le
 void inf_4w(int num_sims, int max_sim_length) {
 
     RNG rng;
+    rng.PPTRNG = 1;
+    rng.makebag();
     std::vector<int> length_of_sims;
     length_of_sims.reserve(num_sims);
     
