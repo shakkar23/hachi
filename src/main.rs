@@ -1,8 +1,8 @@
 use tetris::{board::Board, piece::Piece, piece::Rotation};
 use rusqlite::{Connection, Result};
-use core::panic;
 use std::{env};
 
+mod attribute_finder;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Move {
