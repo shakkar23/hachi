@@ -148,7 +148,8 @@ fn main() -> Result<()> {
         p2_queue_4,
         p2_hold,
         state
-        FROM Data")?;
+        FROM Data
+    ")?;
     let person_iter = stmt.query_map([], |row| {
         Ok(Datum{
             p1:GameState {
