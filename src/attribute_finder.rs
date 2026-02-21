@@ -215,15 +215,14 @@ fn donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i32;
 
     (tslots, donations)
 }
-
 pub struct StaticAttributes {
-    citrus_max_height:u32,
-    citrus_bumpiness:i32,
-    citrus_well_x:usize,
-    citrus_well_depth:i32,
-    citrus_max_donated_height:u32,
-    citrus_n_donations:i32,
-    citrus_t_clears:[i32;4],
+    pub citrus_max_height:u32,
+    pub citrus_bumpiness:i32,
+    pub citrus_well_x:usize,
+    pub citrus_well_depth:i32,
+    pub citrus_max_donated_height:u32,
+    pub citrus_n_donations:i32,
+    pub citrus_t_clears:[i32;4],
 }
 
 pub fn get_attributes(board:Board) -> StaticAttributes {

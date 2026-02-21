@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 tetris = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
 rusqlite = { version = "0.38.0", features = ["bundled"] }
+xgb = "3.0.5"
