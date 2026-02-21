@@ -6,19 +6,58 @@ DATABASE_PATH = "./database.db"
 
 conn = sqlite3.connect(DATABASE_PATH)
 
-sql_query = "SELECT * FROM denormalized_data"
+sql_query = "SELECT * FROM training_data"
 
 df = pd.read_sql_query(sql_query, conn)
 
 conn.close()
 
-df = df.drop(columns=[])
+"""
+CREATE TABLE training_data (
+    game_id INTEGER NOT NULL,
+    move_index INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    ground_truth REAL NOT NULL,
+    -- P1 features
+    p1_bumpiness REAL NOT NULL,
+    p1_n_donations REAL NOT NULL,
+    p1_well_depth REAL NOT NULL,
+    p1_max_donated_height REAL NOT NULL,
+    p1_max_height REAL NOT NULL,
+    p1_t_clear_0 REAL NOT NULL,
+    p1_t_clear_1 REAL NOT NULL,
+    p1_t_clear_2 REAL NOT NULL,
+    p1_t_clear_3 REAL NOT NULL,
+    p1_well_x REAL NOT NULL,
+    -- P2 features
+    p2_bumpiness REAL NOT NULL,
+    p2_n_donations REAL NOT NULL,
+    p2_well_depth REAL NOT NULL,
+    p2_max_donated_height REAL NOT NULL,
+    p2_max_height REAL NOT NULL,
+    p2_t_clear_0 REAL NOT NULL,
+    p2_t_clear_1 REAL NOT NULL,
+    p2_t_clear_2 REAL NOT NULL,
+    p2_t_clear_3 REAL NOT NULL,
+    p2_well_x REAL NOT NULL,
+    PRIMARY KEY (game_id, move_index)
+);
+"""
 
-y = df['player1_score']
+df = df.drop(columns=[
+    "game_id",
+    "move_index",
+    "state"
+])
 
-df = df.drop('player2_score', axis=1)
-df = df.drop('player1_score', axis=1)
+print(df)
+
+y = df['ground_truth']
+
+df = df.drop('ground_truth', axis=1)
+
 X = df
+
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
 

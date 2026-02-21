@@ -2,4 +2,3 @@ xgboost
 scikit-learn
 numpy
 pandas
-cuml
