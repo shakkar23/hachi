@@ -217,59 +217,133 @@ fn extract_data(db_path:String) -> Vec<Datum> {
     return data_iter.map(|e|e.unwrap()).collect();
 }
 
-fn create_dataset(data:&[Datum]) {
-    let mut training_data = Vec::new();
-    let mut states = Vec::new();
-    let mut game_ids = Vec::new();
-    let mut move_indexes = Vec::new();
-    let mut ground_truths = Vec::new();
-    for d in data {
-        let p1_attrs = attribute_finder::get_attributes(d.p1.board);
-        let p2_attrs = attribute_finder::get_attributes(d.p2.board);
+fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::Error> {
+    let mut conn = Connection::open(output_db_path)?;
+    
+    let tx = conn.transaction()?;
+    
+    // Create the training data table
+    tx.execute(
+        "CREATE TABLE IF NOT EXISTS training_data (
+            game_id INTEGER NOT NULL,
+            move_index INTEGER NOT NULL,
+            state TEXT NOT NULL,
+            ground_truth REAL NOT NULL,
+            -- P1 features
+            p1_bumpiness REAL NOT NULL,
+            p1_n_donations REAL NOT NULL,
+            p1_well_depth REAL NOT NULL,
+            p1_max_donated_height REAL NOT NULL,
+            p1_max_height REAL NOT NULL,
+            p1_t_clear_0 REAL NOT NULL,
+            p1_t_clear_1 REAL NOT NULL,
+            p1_t_clear_2 REAL NOT NULL,
+            p1_t_clear_3 REAL NOT NULL,
+            p1_well_x REAL NOT NULL,
+            -- P2 features
+            p2_bumpiness REAL NOT NULL,
+            p2_n_donations REAL NOT NULL,
+            p2_well_depth REAL NOT NULL,
+            p2_max_donated_height REAL NOT NULL,
+            p2_max_height REAL NOT NULL,
+            p2_t_clear_0 REAL NOT NULL,
+            p2_t_clear_1 REAL NOT NULL,
+            p2_t_clear_2 REAL NOT NULL,
+            p2_t_clear_3 REAL NOT NULL,
+            p2_well_x REAL NOT NULL,
+            PRIMARY KEY (game_id, move_index)
+        )",
+        [],
+    )?;
 
-        training_data.extend([
-            p1_attrs.citrus_bumpiness as f32,
-            p1_attrs.citrus_n_donations as f32,
-            p1_attrs.citrus_well_depth as f32,
-            p1_attrs.citrus_max_donated_height as f32,
-            p1_attrs.citrus_max_height as f32,
-            p1_attrs.citrus_t_clears[0] as f32,
-            p1_attrs.citrus_t_clears[1] as f32,
-            p1_attrs.citrus_t_clears[2] as f32,
-            p1_attrs.citrus_t_clears[3] as f32,
-            p1_attrs.citrus_well_depth as f32,
-            p1_attrs.citrus_well_x as f32,
+    {
+        // Prepare the insert statement
+        let mut stmt = tx.prepare(
+            "INSERT OR REPLACE INTO training_data (
+                game_id, move_index, state, ground_truth,
+                p1_bumpiness, p1_n_donations, p1_well_depth, p1_max_donated_height,
+                p1_max_height, p1_t_clear_0, p1_t_clear_1, p1_t_clear_2, p1_t_clear_3,
+                p1_well_x,
+                p2_bumpiness, p2_n_donations, p2_well_depth, p2_max_donated_height,
+                p2_max_height, p2_t_clear_0, p2_t_clear_1, p2_t_clear_2, p2_t_clear_3,
+                p2_well_x
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )?;
 
-            p2_attrs.citrus_bumpiness as f32,
-            p2_attrs.citrus_n_donations as f32,
-            p2_attrs.citrus_well_depth as f32,
-            p2_attrs.citrus_max_donated_height as f32,
-            p2_attrs.citrus_max_height as f32,
-            p2_attrs.citrus_t_clears[0] as f32,
-            p2_attrs.citrus_t_clears[1] as f32,
-            p2_attrs.citrus_t_clears[2] as f32,
-            p2_attrs.citrus_t_clears[3] as f32,
-            p2_attrs.citrus_well_depth as f32,
-            p2_attrs.citrus_well_x as f32
-            ]);
-        ground_truths.push(to_death_value(&d.state).unwrap());
-        states.push(d.state);
-        game_ids.push(d.game_id);
-        move_indexes.push(d.move_index);
-    }
+        let mut training_data = Vec::new();
+        let mut states = Vec::new();
+        let mut game_ids = Vec::new();
+        let mut move_indexes = Vec::new();
+        let mut ground_truths = Vec::new();
+        
+        // First pass: collect features and compute initial ground truths
+        for d in data {
+            let p1_attrs = attribute_finder::get_attributes(d.p1.board);
+            let p2_attrs = attribute_finder::get_attributes(d.p2.board);
 
-    let mut loss = 1f32;
-    for gt in ground_truths.iter_mut().rev() {
-        if *gt != 0f32 {
-            loss = *gt;
-        } else {
-            *gt = (55f32/60f32) * loss;
-            loss = *gt;
+            training_data.push((
+                p1_attrs.citrus_bumpiness as f32,
+                p1_attrs.citrus_n_donations as f32,
+                p1_attrs.citrus_well_depth as f32,
+                p1_attrs.citrus_max_donated_height as f32,
+                p1_attrs.citrus_max_height as f32,
+                p1_attrs.citrus_t_clears[0] as f32,
+                p1_attrs.citrus_t_clears[1] as f32,
+                p1_attrs.citrus_t_clears[2] as f32,
+                p1_attrs.citrus_t_clears[3] as f32,
+                p1_attrs.citrus_well_x as f32,
+                p2_attrs.citrus_bumpiness as f32,
+                p2_attrs.citrus_n_donations as f32,
+                p2_attrs.citrus_well_depth as f32,
+                p2_attrs.citrus_max_donated_height as f32,
+                p2_attrs.citrus_max_height as f32,
+                p2_attrs.citrus_t_clears[0] as f32,
+                p2_attrs.citrus_t_clears[1] as f32,
+                p2_attrs.citrus_t_clears[2] as f32,
+                p2_attrs.citrus_t_clears[3] as f32,
+                p2_attrs.citrus_well_x as f32
+            ));
+            
+            ground_truths.push(to_death_value(&d.state).unwrap());
+            states.push(d.state);
+            game_ids.push(d.game_id);
+            move_indexes.push(d.move_index);
         }
+
+        let mut loss = 1f32;
+        for gt in ground_truths.iter_mut().rev() {
+            if *gt != 0f32 {
+                loss = *gt;
+            } else {
+                *gt = (55f32/60f32) * loss;
+                loss = *gt;
+            }
+        }
+
+        // Insert all rows into the database
+        for i in 0..data.len() {
+            let feats = training_data[i];
+            
+            stmt.execute(rusqlite::params![
+                game_ids[i],
+                move_indexes[i],
+                format!("{:?}", states[i]),  // Convert enum to string
+                ground_truths[i],
+                // P1 features
+                feats.0, feats.1, feats.2, feats.3, feats.4,
+                feats.5, feats.6, feats.7, feats.8, feats.9,
+                // P2 features
+                feats.10, feats.11, feats.12, feats.13, feats.14, 
+                feats.15, feats.16, feats.17, feats.18, feats.19
+            ])?;
+        }
+
     }
-    for (state, game_id, move_index, ground_truth) in izip!(&states, &game_ids, &move_indexes, &ground_truths).rev().take(1000).rev() {
-        println!("{:?}, {:?}, {:?}, {:?}", state, game_id, move_index, ground_truth);
-    }
+
+    tx.commit()?;
+
+    println!("Wrote {} training records to {}", data.len(), output_db_path);
+    Ok(())
 }
 
 fn main() {
@@ -283,5 +357,7 @@ fn main() {
         return;
     }
     let data = extract_data(args[1].to_string());
-    create_dataset(&data);
+    if let Err(e) = create_dataset(&data, &args[1].to_string()) {
+        println!("Error creating dataset: {}", e);
+    }
 }
