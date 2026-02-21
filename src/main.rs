@@ -1,7 +1,7 @@
 use tetris::{board::Board, piece::Piece, piece::Rotation};
 use rusqlite::{Connection, Result};
 use std::{env, fs::exists};
-use xgb::{DMatrix, Booster, parameters};
+use itertools::izip;
 
 mod attribute_finder;
 
@@ -38,7 +38,9 @@ enum State {
 struct Datum {
     p1:GameState,
     p2:GameState,
-    state:State
+    state:State,
+    game_id:u16,
+    move_index:u16
 }
 
 
@@ -83,6 +85,16 @@ fn to_state(s:&str) -> Result<State, ()> {
         "P1_WIN" => State::P1_WIN,
         "P2_WIN" => State::P2_WIN,
         "DRAW" => State::DRAW,
+        _ => return Err(())
+    })
+}
+
+fn to_death_value(s:&State) -> Result<f32, ()> {
+    Ok(match s {
+        State::PLAYING => 0f32,
+        State::P1_WIN => -1f32,
+        State::P2_WIN => 1f32,
+        State::DRAW => 0f32,
         _ => return Err(())
     })
 }
@@ -144,8 +156,10 @@ fn extract_data(db_path:String) -> Vec<Datum> {
         p2_queue_3,
         p2_queue_4,
         p2_hold,
-        state
-        FROM Data").unwrap();
+        state,
+        game_id,
+        move_index
+        FROM Data ORDER BY game_id ASC, move_index ASC").unwrap();
     let data_iter = stmt.query_map([], |row| {
         Ok(Datum{
             p1:GameState {
@@ -194,15 +208,20 @@ fn extract_data(db_path:String) -> Vec<Datum> {
                 ],
                 hold:to_piece(&row.get::<_, String>(31)?).ok()
             },
-            state:to_state(&row.get::<_, String>(32)?).unwrap()
+            state:to_state(&row.get::<_, String>(32)?).unwrap(),
+            game_id: row.get(33)?,
+            move_index: row.get(34)?
         })
     }).unwrap();
     
     return data_iter.map(|e|e.unwrap()).collect();
 }
 
-fn train_1(data:&[Datum]) {
+fn create_dataset(data:&[Datum]) {
     let mut training_data = Vec::new();
+    let mut states = Vec::new();
+    let mut game_ids = Vec::new();
+    let mut move_indexes = Vec::new();
     let mut ground_truths = Vec::new();
     for d in data {
         let p1_attrs = attribute_finder::get_attributes(d.p1.board);
@@ -233,57 +252,24 @@ fn train_1(data:&[Datum]) {
             p2_attrs.citrus_well_depth as f32,
             p2_attrs.citrus_well_x as f32
             ]);
-        ground_truths.push((d.state != State::PLAYING) as u8 as f32);
+        ground_truths.push(to_death_value(&d.state).unwrap());
+        states.push(d.state);
+        game_ids.push(d.game_id);
+        move_indexes.push(d.move_index);
     }
 
     let mut loss = 1f32;
     for gt in ground_truths.iter_mut().rev() {
-        if *gt == 1f32 {
-            loss = 1f32;
+        if *gt != 0f32 {
+            loss = *gt;
         } else {
             *gt = (55f32/60f32) * loss;
             loss = *gt;
         }
     }
-    println!("{:?}", ground_truths);
-    let (train_data, test_data) = training_data.split_at((ground_truths.len() as f32 * 0.8f32) as usize * 22);
-    let (gt_train_data, gt_test_data) = ground_truths.split_at((ground_truths.len() as f32 * 0.8f32) as usize);
-
-    let mut dtrain = DMatrix::from_dense(&train_data, gt_train_data.len()).unwrap();
-
-    // set ground truth labels for the training matrix
-    dtrain.set_labels(&gt_train_data).unwrap();
-    let mut dtest = DMatrix::from_dense(test_data, gt_test_data.len()).unwrap();
-    dtest.set_labels(gt_test_data).unwrap();
-
-    let learning_params = parameters::learning::LearningTaskParametersBuilder::default()
-        .objective(parameters::learning::Objective::BinaryLogistic)
-        .build().unwrap();
-    let tree_params = parameters::tree::TreeBoosterParametersBuilder::default()
-            .max_depth(3)
-            .eta(1.0)
-            .build().unwrap();
-    let booster_params = parameters::BoosterParametersBuilder::default()
-        .booster_type(parameters::BoosterType::Tree(tree_params))
-        .learning_params(learning_params)
-        .verbose(true)
-        .build().unwrap();
-    
-    let evaluation_sets = &[(&dtrain, "train"), (&dtest, "test")];
-
-    
-    // overall configuration for training/evaluation
-    let params = parameters::TrainingParametersBuilder::default()
-        .dtrain(&dtrain)                         // dataset to train with
-        .boost_rounds(2)                         // number of training iterations
-        .booster_params(booster_params)          // model parameters
-        .evaluation_sets(Some(evaluation_sets)) // optional datasets to evaluate against in each iteration
-        .build().unwrap();
-
-    let bst = Booster::train(&params).unwrap();
-    bst.save("guh.json").unwrap();
-
-    println!("{:?}", bst.predict(&dtest).unwrap());
+    for (state, game_id, move_index, ground_truth) in izip!(&states, &game_ids, &move_indexes, &ground_truths).rev().take(1000).rev() {
+        println!("{:?}, {:?}, {:?}, {:?}", state, game_id, move_index, ground_truth);
+    }
 }
 
 fn main() {
@@ -297,5 +283,5 @@ fn main() {
         return;
     }
     let data = extract_data(args[1].to_string());
-    train_1(&data);
+    create_dataset(&data);
 }

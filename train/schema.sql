@@ -35,8 +35,7 @@ CREATE TABLE training_data (
     gamestate2 INTEGER REFERENCES gamestate_features(state_id),
     action1 INTEGER REFERENCES action_features(action_id),
     action2 INTEGER REFERENCES action_features(action_id),
-    player1_score FLOAT,
-    player2_score FLOAT
+    discount_value FLOAT,
 );
 
 CREATE OR REPLACE VIEW denormalized_data AS

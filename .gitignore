@@ -3,6 +3,7 @@ out/
 build_rel/
 /.vs
 /CMakeSettings.json
+database.db
 
 
 # Added by cargo
