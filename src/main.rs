@@ -1,6 +1,7 @@
 use tetris::{board::Board, piece::Piece, piece::Rotation};
 use rusqlite::{Connection, Result};
-use std::{env};
+use std::{env, fs::exists};
+use xgb::{DMatrix, Booster, parameters};
 
 mod attribute_finder;
 
@@ -25,7 +26,7 @@ struct GameState {
     pub hold:Option<Piece>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 enum State {
     PLAYING,
     P1_WIN,
@@ -106,13 +107,9 @@ const char* sql =
 		"p2_hold TEXT NOT NULL"
 		");";
 */
-fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() == 1 {
-        println!("please put in a db path for arg 1");
-        return Ok(());
-    }
-    let conn = Connection::open(&args[1])?;
+
+fn extract_data(db_path:String) -> Vec<Datum> {
+    let conn = Connection::open(&db_path).unwrap();
     
     let mut stmt = conn.prepare("SELECT 
         p1_board,
@@ -148,8 +145,8 @@ fn main() -> Result<()> {
         p2_queue_4,
         p2_hold,
         state
-        FROM Data")?;
-    let person_iter = stmt.query_map([], |row| {
+        FROM Data").unwrap();
+    let data_iter = stmt.query_map([], |row| {
         Ok(Datum{
             p1:GameState {
                 board: to_board(row.get(0)?),
@@ -199,10 +196,106 @@ fn main() -> Result<()> {
             },
             state:to_state(&row.get::<_, String>(32)?).unwrap()
         })
-    })?;
+    }).unwrap();
+    
+    return data_iter.map(|e|e.unwrap()).collect();
+}
 
-    for person in person_iter {
-        println!("Found datum {:?}", person.unwrap());
+fn train_1(data:&[Datum]) {
+    let mut training_data = Vec::new();
+    let mut ground_truths = Vec::new();
+    for d in data {
+        let p1_attrs = attribute_finder::get_attributes(d.p1.board);
+        let p2_attrs = attribute_finder::get_attributes(d.p2.board);
+
+        training_data.extend([
+            p1_attrs.citrus_bumpiness as f32,
+            p1_attrs.citrus_n_donations as f32,
+            p1_attrs.citrus_well_depth as f32,
+            p1_attrs.citrus_max_donated_height as f32,
+            p1_attrs.citrus_max_height as f32,
+            p1_attrs.citrus_t_clears[0] as f32,
+            p1_attrs.citrus_t_clears[1] as f32,
+            p1_attrs.citrus_t_clears[2] as f32,
+            p1_attrs.citrus_t_clears[3] as f32,
+            p1_attrs.citrus_well_depth as f32,
+            p1_attrs.citrus_well_x as f32,
+
+            p2_attrs.citrus_bumpiness as f32,
+            p2_attrs.citrus_n_donations as f32,
+            p2_attrs.citrus_well_depth as f32,
+            p2_attrs.citrus_max_donated_height as f32,
+            p2_attrs.citrus_max_height as f32,
+            p2_attrs.citrus_t_clears[0] as f32,
+            p2_attrs.citrus_t_clears[1] as f32,
+            p2_attrs.citrus_t_clears[2] as f32,
+            p2_attrs.citrus_t_clears[3] as f32,
+            p2_attrs.citrus_well_depth as f32,
+            p2_attrs.citrus_well_x as f32
+            ]);
+        ground_truths.push((d.state != State::PLAYING) as u8 as f32);
     }
-    Ok(())
+
+    let mut loss = 1f32;
+    for gt in ground_truths.iter_mut().rev() {
+        if *gt == 1f32 {
+            loss = 1f32;
+        } else {
+            *gt = (55f32/60f32) * loss;
+            loss = *gt;
+        }
+    }
+    println!("{:?}", ground_truths);
+    let (train_data, test_data) = training_data.split_at((ground_truths.len() as f32 * 0.8f32) as usize * 22);
+    let (gt_train_data, gt_test_data) = ground_truths.split_at((ground_truths.len() as f32 * 0.8f32) as usize);
+
+    let mut dtrain = DMatrix::from_dense(&train_data, gt_train_data.len()).unwrap();
+
+    // set ground truth labels for the training matrix
+    dtrain.set_labels(&gt_train_data).unwrap();
+    let mut dtest = DMatrix::from_dense(test_data, gt_test_data.len()).unwrap();
+    dtest.set_labels(gt_test_data).unwrap();
+
+    let learning_params = parameters::learning::LearningTaskParametersBuilder::default()
+        .objective(parameters::learning::Objective::BinaryLogistic)
+        .build().unwrap();
+    let tree_params = parameters::tree::TreeBoosterParametersBuilder::default()
+            .max_depth(3)
+            .eta(1.0)
+            .build().unwrap();
+    let booster_params = parameters::BoosterParametersBuilder::default()
+        .booster_type(parameters::BoosterType::Tree(tree_params))
+        .learning_params(learning_params)
+        .verbose(true)
+        .build().unwrap();
+    
+    let evaluation_sets = &[(&dtrain, "train"), (&dtest, "test")];
+
+    
+    // overall configuration for training/evaluation
+    let params = parameters::TrainingParametersBuilder::default()
+        .dtrain(&dtrain)                         // dataset to train with
+        .boost_rounds(2)                         // number of training iterations
+        .booster_params(booster_params)          // model parameters
+        .evaluation_sets(Some(evaluation_sets)) // optional datasets to evaluate against in each iteration
+        .build().unwrap();
+
+    let bst = Booster::train(&params).unwrap();
+    bst.save("guh.json").unwrap();
+
+    println!("{:?}", bst.predict(&dtest).unwrap());
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() == 1 {
+        println!("please put in a db path for arg 1");
+        return;
+    }
+    if !exists(args[1].to_string()).unwrap() {
+        println!("your file does not exist!");
+        return;
+    }
+    let data = extract_data(args[1].to_string());
+    train_1(&data);
 }
