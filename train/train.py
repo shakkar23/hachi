@@ -6,6 +6,9 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.datasets import make_regression
 import numpy as np 
 
+from xgboost import plot_importance
+import matplotlib.pyplot as plt
+
 import time
 
 t = time.perf_counter()
@@ -28,8 +31,10 @@ y_pred = xgb_model.predict(X_test)
 mse = mean_squared_error(y_test, y_pred)
 r2 = r2_score(y_test, y_pred)
 
-print(f"Training done in {time.perf_counter() - t} seconds")
+print(f"Training done in {time.perf_counter() - t:.4f} seconds")
 print(f"Mean Squared Error: {mse:.4f}")
 print(f"MSE Legend. 0.01 : Good. 0.05 : Fine. 0.1 : Weak. 0.25 : Worst")
 print(f"R² Score: {r2:.4f}")
 
+plot_importance(xgb_model)
+plt.show()

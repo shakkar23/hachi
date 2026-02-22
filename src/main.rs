@@ -282,26 +282,26 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::
             let p2_attrs = attribute_finder::get_attributes(d.p2.board);
 
             training_data.push((
-                p1_attrs.citrus_bumpiness as f32,
-                p1_attrs.citrus_n_donations as f32,
-                p1_attrs.citrus_well_depth as f32,
-                p1_attrs.citrus_max_donated_height as f32,
-                p1_attrs.citrus_max_height as f32,
-                p1_attrs.citrus_t_clears[0] as f32,
-                p1_attrs.citrus_t_clears[1] as f32,
-                p1_attrs.citrus_t_clears[2] as f32,
-                p1_attrs.citrus_t_clears[3] as f32,
-                p1_attrs.citrus_well_x as f32,
-                p2_attrs.citrus_bumpiness as f32,
-                p2_attrs.citrus_n_donations as f32,
-                p2_attrs.citrus_well_depth as f32,
-                p2_attrs.citrus_max_donated_height as f32,
-                p2_attrs.citrus_max_height as f32,
-                p2_attrs.citrus_t_clears[0] as f32,
-                p2_attrs.citrus_t_clears[1] as f32,
-                p2_attrs.citrus_t_clears[2] as f32,
-                p2_attrs.citrus_t_clears[3] as f32,
-                p2_attrs.citrus_well_x as f32
+                p1_attrs.sunbeam_bumpiness as f32,
+                p1_attrs.sunbeam_n_donations as f32,
+                p1_attrs.sunbeam_well_depth as f32,
+                p1_attrs.sunbeam_max_donated_height as f32,
+                p1_attrs.sunbeam_max_height as f32,
+                p1_attrs.sunbeam_t_clears[0] as f32,
+                p1_attrs.sunbeam_t_clears[1] as f32,
+                p1_attrs.sunbeam_t_clears[2] as f32,
+                p1_attrs.sunbeam_t_clears[3] as f32,
+                p1_attrs.sunbeam_well_x as f32,
+                p2_attrs.sunbeam_bumpiness as f32,
+                p2_attrs.sunbeam_n_donations as f32,
+                p2_attrs.sunbeam_well_depth as f32,
+                p2_attrs.sunbeam_max_donated_height as f32,
+                p2_attrs.sunbeam_max_height as f32,
+                p2_attrs.sunbeam_t_clears[0] as f32,
+                p2_attrs.sunbeam_t_clears[1] as f32,
+                p2_attrs.sunbeam_t_clears[2] as f32,
+                p2_attrs.sunbeam_t_clears[3] as f32,
+                p2_attrs.sunbeam_well_x as f32
             ));
             
             ground_truths.push(to_death_value(&d.state).unwrap());

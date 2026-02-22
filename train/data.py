@@ -47,7 +47,7 @@ CREATE TABLE training_data (
 df = df.drop(columns=[
     "game_id",
     "move_index",
-    "state"
+    "state",
 ])
 
 print(df)

@@ -3,54 +3,8 @@ use tetris::board::Board;
 use tetris::moves::Move;
 use tetris::piece::{Piece,Rotation};
 
-// copied from https://github.com/citrus610/sunbeam/blob/main/bot/src/eval.rs
-#[derive(Debug, Clone, Copy)]
-pub struct Weights {
-    pub height: i32,
-    pub well: i32,
-    pub center: i32,
-    pub bumpiness: i32,
-    pub holes: i32,
-    pub garbage: i32,
-    pub tslot: [i32; 4],
-    pub b2b_bonus: i32,
-    pub combo_bonus: i32,
-
-    pub clear: [i32; 4],
-    pub tspin: [i32; 3],
-    pub tspin_mini: [i32; 2],
-    pub combo: [i32; 5],
-    pub b2b: i32,
-    pub pc: i32,
-    pub waste_t: i32,
-}
-
-impl Default for Weights {
-    fn default() -> Self {
-        Self {
-            height: -50,
-            well: 25,
-            center: -100,
-            bumpiness: -25,
-            holes: -400,
-            garbage: -300,
-            tslot: [150, 200, 250, 500],
-            b2b_bonus: 200,
-            combo_bonus: 200,
-
-            clear: [-400, -350, -300, 250],
-            tspin: [50, 400, 800],
-            tspin_mini: [0, 0],
-            combo: [200, 500, 1000, 1500, 2000],
-            b2b: 100,
-            pc: 2000,
-            waste_t: -100,
-        }
-    }
-}
-
 // Return the well's depth and the position of the well
-fn well(board: &Board, heights: &[u32; 10]) -> (i32, usize) {
+fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i32, usize) {
     let mut x = 0;
 
     for i in 1..10 {
@@ -74,7 +28,7 @@ fn well(board: &Board, heights: &[u32; 10]) -> (i32, usize) {
     (mask.count_ones() as i32, x)
 }
 
-fn bumpiness(heights: &[u32; 10], well_x: usize) -> i32 {
+fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i32 {
     let mut bumpiness = 0;
     let mut left = 0;
 
@@ -97,7 +51,7 @@ fn bumpiness(heights: &[u32; 10], well_x: usize) -> i32 {
 }
 
 // Get the number of holes overground and underground
-fn holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i32, i32) {
+fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i32, i32) {
     let min_height = heights[well_x];
 
     let mut holes = 0;
@@ -110,7 +64,7 @@ fn holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i32, i32) {
 }
 
 // Find the highest tslot
-fn tslot(board: &Board, heights: &[u32; 10]) -> Option<Move> {
+fn sunbeam_tslot(board: &Board, heights: &[u32; 10]) -> Option<Move> {
     for x in 0..8 {
         if heights[x] > heights[x + 1] && heights[x] + 1 < heights[x + 2] {
             if ((board.cols[x] >> (heights[x] - 1)) & 0b111) == 0b001
@@ -188,12 +142,12 @@ fn tslot(board: &Board, heights: &[u32; 10]) -> Option<Move> {
     None
 }
 
-fn donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i32; 4], i32) {
+fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i32; 4], i32) {
     let mut tslots = [0; 4];
     let mut donations = 0;
 
     for _ in 0..depth {
-        if let Some(tslot) = tslot(board, heights) {
+        if let Some(tslot) = sunbeam_tslot(board, heights) {
             let mut clone = board.clone();
 
             clone.place(&tslot);
@@ -215,29 +169,73 @@ fn donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i32;
 
     (tslots, donations)
 }
+
+fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i32 {
+    let mut holes = 0i32;
+
+    for x in 0..10 {
+        let h = heights[x];
+        if h == 0 {
+            continue;
+        }
+        let underneath = (1u64 << h) - 1;
+        let empty_bits = (!board.cols[x]) & underneath;
+        holes += empty_bits.count_ones() as i32;
+    }
+
+    holes
+}
+
+fn cc_coveredness(board: &Board) -> i32 {
+    let mut coveredness = 0;
+    for &c in &board.cols {
+        let height = 64 - c.leading_zeros();
+        let underneath = (1 << height) - 1;
+        let mut holes = !c & underneath;
+        while holes != 0 {
+            let y = holes.trailing_zeros();
+            coveredness += (height - y) as i32;
+            holes &= !(1 << y);
+        }
+    }
+
+    coveredness
+}
+
+fn cc_row_transitions(board: &Board) -> i32 {
+    let mut row_transitions = 0;
+    row_transitions += (!0 ^ board.cols[0]).count_ones();
+    row_transitions += (!0 ^ board.cols[9]).count_ones();
+    for cs in board.cols.windows(2) {
+        row_transitions += (cs[0] ^ cs[1]).count_ones();
+    }
+
+    row_transitions as i32
+}
+
 pub struct StaticAttributes {
-    pub citrus_max_height:u32,
-    pub citrus_bumpiness:i32,
-    pub citrus_well_x:usize,
-    pub citrus_well_depth:i32,
-    pub citrus_max_donated_height:u32,
-    pub citrus_n_donations:i32,
-    pub citrus_t_clears:[i32;4],
+    pub sunbeam_max_height:u32,
+    pub sunbeam_bumpiness:i32,
+    pub sunbeam_well_x:usize,
+    pub sunbeam_well_depth:i32,
+    pub sunbeam_max_donated_height:u32,
+    pub sunbeam_n_donations:i32,
+    pub sunbeam_t_clears:[i32;4],
 }
 
 pub fn get_attributes(board:Board) -> StaticAttributes {
-    let citrus_heights = board.heights();
-    let (citrus_well, citrus_well_x_pos) = well(&board, &citrus_heights);
+    let sunbeam_heights = board.heights();
+    let (sunbeam_well, sunbeam_well_x_pos) = sunbeam_well(&board, &sunbeam_heights);
     let mut donated_board = board;
-    let mut donated_heights = citrus_heights;
-    let (citrus_t_slots, citrus_donations) = donations(&mut donated_board, &mut donated_heights, 2);
+    let mut donated_heights = sunbeam_heights;
+    let (sunbeam_t_slots, sunbeam_donations) = sunbeam_donations(&mut donated_board, &mut donated_heights, 2);
     StaticAttributes {
-        citrus_max_height:*citrus_heights.iter().max().unwrap(),
-        citrus_bumpiness: bumpiness(&citrus_heights, citrus_well_x_pos),
-        citrus_well_x: citrus_well_x_pos,
-        citrus_well_depth:citrus_well,
-        citrus_max_donated_height:*donated_heights.iter().max().unwrap(),
-        citrus_n_donations:citrus_donations,
-        citrus_t_clears:citrus_t_slots,
+        sunbeam_max_height:*sunbeam_heights.iter().max().unwrap(),
+        sunbeam_bumpiness: sunbeam_bumpiness(&sunbeam_heights, sunbeam_well_x_pos),
+        sunbeam_well_x: sunbeam_well_x_pos,
+        sunbeam_well_depth:sunbeam_well,
+        sunbeam_max_donated_height:*donated_heights.iter().max().unwrap(),
+        sunbeam_n_donations:sunbeam_donations,
+        sunbeam_t_clears:sunbeam_t_slots,
     }
 }
