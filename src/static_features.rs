@@ -3,8 +3,23 @@ use tetris::board::Board;
 use tetris::moves::Move;
 use tetris::piece::{Piece,Rotation};
 
+use crate::game::{GameState};
+
+pub struct StaticFeatures {
+    pub sunbeam_max_height:u32,
+    pub sunbeam_bumpiness:i32,
+    pub sunbeam_well_x:usize,
+    pub sunbeam_well_depth:i32,
+    pub sunbeam_max_donated_height:u32,
+    pub sunbeam_n_donations:i32,
+    pub sunbeam_t_clears:[i32;4],
+    pub cc_holes:i32,
+    pub cc_coveredness:i32,
+    pub cc_row_transitions:i32
+}
+
 // Return the well's depth and the position of the well
-fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i32, usize) {
+pub fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i32, usize) {
     let mut x = 0;
 
     for i in 1..10 {
@@ -28,7 +43,7 @@ fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i32, usize) {
     (mask.count_ones() as i32, x)
 }
 
-fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i32 {
+pub fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i32 {
     let mut bumpiness = 0;
     let mut left = 0;
 
@@ -51,7 +66,7 @@ fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i32 {
 }
 
 // Get the number of holes overground and underground
-fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i32, i32) {
+pub fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i32, i32) {
     let min_height = heights[well_x];
 
     let mut holes = 0;
@@ -64,7 +79,7 @@ fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i32, i32
 }
 
 // Find the highest tslot
-fn sunbeam_tslot(board: &Board, heights: &[u32; 10]) -> Option<Move> {
+pub fn sunbeam_tslot(board: &Board, heights: &[u32; 10]) -> Option<Move> {
     for x in 0..8 {
         if heights[x] > heights[x + 1] && heights[x] + 1 < heights[x + 2] {
             if ((board.cols[x] >> (heights[x] - 1)) & 0b111) == 0b001
@@ -142,7 +157,7 @@ fn sunbeam_tslot(board: &Board, heights: &[u32; 10]) -> Option<Move> {
     None
 }
 
-fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i32; 4], i32) {
+pub fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i32; 4], i32) {
     let mut tslots = [0; 4];
     let mut donations = 0;
 
@@ -170,7 +185,7 @@ fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -
     (tslots, donations)
 }
 
-fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i32 {
+pub fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i32 {
     let mut holes = 0i32;
 
     for x in 0..10 {
@@ -186,7 +201,7 @@ fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i32 {
     holes
 }
 
-fn cc_coveredness(board: &Board) -> i32 {
+pub fn cc_coveredness(board: &Board) -> i32 {
     let mut coveredness = 0;
     for &c in &board.cols {
         let height = 64 - c.leading_zeros();
@@ -202,7 +217,7 @@ fn cc_coveredness(board: &Board) -> i32 {
     coveredness
 }
 
-fn cc_row_transitions(board: &Board) -> i32 {
+pub fn cc_row_transitions(board: &Board) -> i32 {
     let mut row_transitions = 0;
     row_transitions += (!0 ^ board.cols[0]).count_ones();
     row_transitions += (!0 ^ board.cols[9]).count_ones();
@@ -213,23 +228,18 @@ fn cc_row_transitions(board: &Board) -> i32 {
     row_transitions as i32
 }
 
-pub struct StaticAttributes {
-    pub sunbeam_max_height:u32,
-    pub sunbeam_bumpiness:i32,
-    pub sunbeam_well_x:usize,
-    pub sunbeam_well_depth:i32,
-    pub sunbeam_max_donated_height:u32,
-    pub sunbeam_n_donations:i32,
-    pub sunbeam_t_clears:[i32;4],
-}
-
-pub fn get_attributes(board:Board) -> StaticAttributes {
+pub fn get_static_features(game:&GameState) -> StaticFeatures {
+    let board = game.board;
     let sunbeam_heights = board.heights();
     let (sunbeam_well, sunbeam_well_x_pos) = sunbeam_well(&board, &sunbeam_heights);
     let mut donated_board = board;
     let mut donated_heights = sunbeam_heights;
     let (sunbeam_t_slots, sunbeam_donations) = sunbeam_donations(&mut donated_board, &mut donated_heights, 2);
-    StaticAttributes {
+    let cc_holes = cc_count_holes(&board, &sunbeam_heights);
+    let cc_coveredness = cc_coveredness(&board);
+    let cc_row_transitions = cc_row_transitions(&board);
+
+    StaticFeatures {
         sunbeam_max_height:*sunbeam_heights.iter().max().unwrap(),
         sunbeam_bumpiness: sunbeam_bumpiness(&sunbeam_heights, sunbeam_well_x_pos),
         sunbeam_well_x: sunbeam_well_x_pos,
@@ -237,5 +247,8 @@ pub fn get_attributes(board:Board) -> StaticAttributes {
         sunbeam_max_donated_height:*donated_heights.iter().max().unwrap(),
         sunbeam_n_donations:sunbeam_donations,
         sunbeam_t_clears:sunbeam_t_slots,
+        cc_holes:cc_holes,
+        cc_coveredness:cc_coveredness,
+        cc_row_transitions:cc_row_transitions
     }
-}
+} 

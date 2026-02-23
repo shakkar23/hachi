@@ -1,48 +1,15 @@
 use tetris::{board::Board, piece::Piece, piece::Rotation};
 use rusqlite::{Connection, Result};
 use std::{env, fs::exists};
-use itertools::izip;
 
-mod attribute_finder;
+mod hachi;
+mod static_features;
+mod game;
+mod feature_extractor;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Move {
-    pub move_type:Option<Piece>,
-    pub rotation:Rotation,
-    pub x:u8,
-    pub y:u8,
-}
+use crate::feature_extractor::Features;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct GameState {
-    pub board: Board,
-    pub current_piece:Piece,
-    pub placement:Move,
-    pub meter:u8,
-    pub attack:u8,
-    pub damage_received:u8,
-    pub spun:bool,
-    pub queue:[Piece;5],
-    pub hold:Option<Piece>
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-enum State {
-    PLAYING,
-    P1_WIN,
-    P2_WIN,
-    DRAW
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Datum {
-    p1:GameState,
-    p2:GameState,
-    state:State,
-    game_id:u16,
-    move_index:u16
-}
-
+use crate::game::{GameState,Move,Datum,State};
 
 fn to_piece(s:&str) -> Result<Piece, ()> {
     match s {
@@ -92,8 +59,8 @@ fn to_state(s:&str) -> Result<State, ()> {
 fn to_death_value(s:&State) -> Result<f32, ()> {
     Ok(match s {
         State::PLAYING => 0f32,
-        State::P1_WIN => -1f32,
-        State::P2_WIN => 1f32,
+        State::P1_WIN => 1f32,
+        State::P2_WIN => -1f32,
         State::DRAW => 0f32,
         _ => return Err(())
     })
@@ -222,52 +189,34 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::
     
     let tx = conn.transaction()?;
     
+    tx.execute("DROP TABLE IF EXISTS training_data", []);
+    
     // Create the training data table
     tx.execute(
-        "CREATE TABLE IF NOT EXISTS training_data (
+        &format!("CREATE TABLE IF NOT EXISTS training_data (
             game_id INTEGER NOT NULL,
             move_index INTEGER NOT NULL,
             state TEXT NOT NULL,
             ground_truth REAL NOT NULL,
-            -- P1 features
-            p1_bumpiness REAL NOT NULL,
-            p1_n_donations REAL NOT NULL,
-            p1_well_depth REAL NOT NULL,
-            p1_max_donated_height REAL NOT NULL,
-            p1_max_height REAL NOT NULL,
-            p1_t_clear_0 REAL NOT NULL,
-            p1_t_clear_1 REAL NOT NULL,
-            p1_t_clear_2 REAL NOT NULL,
-            p1_t_clear_3 REAL NOT NULL,
-            p1_well_x REAL NOT NULL,
-            -- P2 features
-            p2_bumpiness REAL NOT NULL,
-            p2_n_donations REAL NOT NULL,
-            p2_well_depth REAL NOT NULL,
-            p2_max_donated_height REAL NOT NULL,
-            p2_max_height REAL NOT NULL,
-            p2_t_clear_0 REAL NOT NULL,
-            p2_t_clear_1 REAL NOT NULL,
-            p2_t_clear_2 REAL NOT NULL,
-            p2_t_clear_3 REAL NOT NULL,
-            p2_well_x REAL NOT NULL,
+            {},
+            {},
             PRIMARY KEY (game_id, move_index)
         )",
-        [],
+            Features::sql_columns_with_types("p1"),
+            Features::sql_columns_with_types("p2"),
+        ), []
     )?;
 
     {
         // Prepare the insert statement
         let mut stmt = tx.prepare(
-            "INSERT OR REPLACE INTO training_data (
-                game_id, move_index, state, ground_truth,
-                p1_bumpiness, p1_n_donations, p1_well_depth, p1_max_donated_height,
-                p1_max_height, p1_t_clear_0, p1_t_clear_1, p1_t_clear_2, p1_t_clear_3,
-                p1_well_x,
-                p2_bumpiness, p2_n_donations, p2_well_depth, p2_max_donated_height,
-                p2_max_height, p2_t_clear_0, p2_t_clear_1, p2_t_clear_2, p2_t_clear_3,
-                p2_well_x
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            &format!(
+                "INSERT OR REPLACE INTO training_data (game_id, move_index, state, ground_truth, {}, {}) VALUES (?,?,?,?,{}, {})",
+                Features::sql_columns("p1"),
+                Features::sql_columns("p2"),
+                Features::sql_placeholders(),
+                Features::sql_placeholders()
+            )
         )?;
 
         let mut training_data = Vec::new();
@@ -276,32 +225,13 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::
         let mut move_indexes = Vec::new();
         let mut ground_truths = Vec::new();
         
-        // First pass: collect features and compute initial ground truths
         for d in data {
-            let p1_attrs = attribute_finder::get_attributes(d.p1.board);
-            let p2_attrs = attribute_finder::get_attributes(d.p2.board);
+            let p1_attrs = feature_extractor::extract_features(&d.p1);
+            let p2_attrs = feature_extractor::extract_features(&d.p2);
 
             training_data.push((
-                p1_attrs.sunbeam_bumpiness as f32,
-                p1_attrs.sunbeam_n_donations as f32,
-                p1_attrs.sunbeam_well_depth as f32,
-                p1_attrs.sunbeam_max_donated_height as f32,
-                p1_attrs.sunbeam_max_height as f32,
-                p1_attrs.sunbeam_t_clears[0] as f32,
-                p1_attrs.sunbeam_t_clears[1] as f32,
-                p1_attrs.sunbeam_t_clears[2] as f32,
-                p1_attrs.sunbeam_t_clears[3] as f32,
-                p1_attrs.sunbeam_well_x as f32,
-                p2_attrs.sunbeam_bumpiness as f32,
-                p2_attrs.sunbeam_n_donations as f32,
-                p2_attrs.sunbeam_well_depth as f32,
-                p2_attrs.sunbeam_max_donated_height as f32,
-                p2_attrs.sunbeam_max_height as f32,
-                p2_attrs.sunbeam_t_clears[0] as f32,
-                p2_attrs.sunbeam_t_clears[1] as f32,
-                p2_attrs.sunbeam_t_clears[2] as f32,
-                p2_attrs.sunbeam_t_clears[3] as f32,
-                p2_attrs.sunbeam_well_x as f32
+                p1_attrs,
+                p2_attrs
             ));
             
             ground_truths.push(to_death_value(&d.state).unwrap());
@@ -315,27 +245,30 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::
             if *gt != 0f32 {
                 loss = *gt;
             } else {
-                *gt = (55f32/60f32) * loss;
+                *gt = (50f32/60f32) * loss;
                 loss = *gt;
             }
         }
 
         // Insert all rows into the database
         for i in 0..data.len() {
-            let feats = training_data[i];
+            let feats = &training_data[i];
+            let mut params:Vec<rusqlite::types::Value> = Vec::new();
+
+            params.push(game_ids[i].into());
+            params.push(move_indexes[i].into());
+            params.push(format!("{:?}", states[i]).into());
+            params.push(ground_truths[i].into());
             
-            stmt.execute(rusqlite::params![
-                game_ids[i],
-                move_indexes[i],
-                format!("{:?}", states[i]),  // Convert enum to string
-                ground_truths[i],
-                // P1 features
-                feats.0, feats.1, feats.2, feats.3, feats.4,
-                feats.5, feats.6, feats.7, feats.8, feats.9,
-                // P2 features
-                feats.10, feats.11, feats.12, feats.13, feats.14, 
-                feats.15, feats.16, feats.17, feats.18, feats.19
-            ])?;
+            for value in feats.0.values() {
+                params.push(value.into());
+            }
+            
+            for value in feats.1.values() {
+                params.push(value.into());
+            }
+            
+            stmt.execute(rusqlite::params_from_iter(params))?;
         }
 
     }
