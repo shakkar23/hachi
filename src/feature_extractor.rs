@@ -29,8 +29,8 @@ pub struct Features {
 }
 
 pub fn extract_features(game: &game::GameState) -> Features {
-    let mut sf = static_features::get_static_features(&game);
-    let mut hf = hachi::get_hachi_features(&game);
+    let sf = static_features::get_static_features(&game);
+    let hf = hachi::get_hachi_features(&game);
 
     Features {
         heights: hf.heights,
@@ -107,7 +107,7 @@ impl Features {
         
         // all_3x3s array
         for i in 0..512 {
-            //columns.push(format!("{}_{}{}{}", prefix, "all_3x3s", i, type_suffix));
+            columns.push(format!("{}_{}{}{}", prefix, "all_3x3s", i, type_suffix));
         }
         
         // sunbeam scalar fields
@@ -133,7 +133,7 @@ impl Features {
 
     pub fn sql_placeholders() -> String {
         let count = 
-                    10 + 9 + 10 + 7 + 7 + 7 + 7 + //512 +  // arrays
+                    10 + 9 + 10 + 7 + 7 + 7 + 7 + 512 +  // arrays
                     6 +  // sunbeam scalars
                     4 +  // sunbeam_t_clears
                     3;   // cc scalars
@@ -183,7 +183,7 @@ impl Features {
 
         // 3x3s
         for &no in &self.all_3x3s {
-            //vals.push(rusqlite::types::Value::from(no as i64));
+            vals.push(rusqlite::types::Value::from(no as i64));
         }
         
         

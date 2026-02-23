@@ -18,7 +18,8 @@ xgb_model = xgb.XGBRegressor(
     n_estimators=150,
     max_depth=15,
     learning_rate=0.1,
-    random_state=42
+    random_state=42,
+    n_jobs=-1
 )
 
 # Train the model
@@ -36,5 +37,5 @@ print(f"Mean Squared Error: {mse:.4f}")
 print(f"MSE Legend. 0.01 : Good. 0.05 : Fine. 0.1 : Weak. 0.25 : Worst")
 print(f"R² Score: {r2:.4f}")
 
-plot_importance(xgb_model)
+plot_importance(xgb_model, max_num_features=50)
 plt.show()

@@ -8,5 +8,6 @@ tetris = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
 derive-sql = "0.13"
 derive-sql-statement = "0.12"
 struct_iterable = "0.1.1"
+rayon = "1.7"
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 itertools = "0.12"

@@ -25,7 +25,7 @@ fn get_first_hole_depths(board: &Board) -> [i32; 10] {
 
     for x in 0..10 {
         depths[x] = board.cols[x].trailing_ones() as i32;
-        if (heights[x] as i32 == depths[x]) {
+        if heights[x] as i32 == depths[x] {
             depths[x] = 0;
         }
     }
@@ -92,7 +92,23 @@ fn get_next_piece(gamestate: &GameState) -> [i32; 7] {
 }
 
 fn get_3x3s(board: &Board) -> [i32; 512] {
-    [0;512]
+    let mut counts = [0; 512];
+    let height = board.heights().iter().copied().max().unwrap() as usize;
+
+    for x in 0..7 {
+        for y in 0..height {
+            let mask = [0b111 << y, 0b111 << y, 0b111 << y];
+            let cols = &board.cols[x..=x+2];
+            let window = [
+                (cols[0] & mask[0]) >> y,
+                (cols[1] & mask[1]) >> y,
+                (cols[2] & mask[2]) >> y
+            ];
+            counts[(window[0] | (window[1] << 3) | (window[2] << 6)) as usize] += 1;
+        }
+    }
+
+    counts
 }
 
 pub struct HachiFeatures {

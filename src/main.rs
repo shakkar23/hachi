@@ -1,6 +1,8 @@
 use tetris::{board::Board, piece::Piece, piece::Rotation};
 use rusqlite::{Connection, Result};
 use std::{env, fs::exists};
+use rayon::prelude::*;
+use std::time::Instant;
 
 mod hachi;
 mod static_features;
@@ -185,6 +187,8 @@ fn extract_data(db_path:String) -> Vec<Datum> {
 }
 
 fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::Error> {
+    let start = Instant::now();
+
     let mut conn = Connection::open(output_db_path)?;
     
     let tx = conn.transaction()?;
@@ -219,52 +223,53 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::
             )
         )?;
 
-        let mut training_data = Vec::new();
-        let mut states = Vec::new();
-        let mut game_ids = Vec::new();
-        let mut move_indexes = Vec::new();
-        let mut ground_truths = Vec::new();
-        
-        for d in data {
-            let p1_attrs = feature_extractor::extract_features(&d.p1);
-            let p2_attrs = feature_extractor::extract_features(&d.p2);
-
-            training_data.push((
-                p1_attrs,
-                p2_attrs
-            ));
-            
-            ground_truths.push(to_death_value(&d.state).unwrap());
-            states.push(d.state);
-            game_ids.push(d.game_id);
-            move_indexes.push(d.move_index);
+        struct Row {
+            pub features:(Features, Features),
+            pub state:State,
+            pub game_id:u16,
+            pub move_index: u16,
+            pub ground_truth: f32
         }
 
-        let mut loss = 1f32;
-        for gt in ground_truths.iter_mut().rev() {
-            if *gt != 0f32 {
-                loss = *gt;
+        let mut rows: Vec<Row> = data.par_iter()
+            .map(|d| {
+                let p1_attrs = feature_extractor::extract_features(&d.p1);
+                let p2_attrs = feature_extractor::extract_features(&d.p2);
+
+                Row {
+                    features: (p1_attrs, p2_attrs),
+                    state: d.state,
+                    game_id: d.game_id,
+                    move_index: d.move_index,
+                    ground_truth: to_death_value(&d.state).unwrap()
+                }
+            })
+            .collect();
+
+        let mut loss: f32 = 1f32;
+        for row in rows.iter_mut().rev() {
+            if row.ground_truth != 0f32 {
+                loss = row.ground_truth;
             } else {
-                *gt = (50f32/60f32) * loss;
-                loss = *gt;
+                row.ground_truth = (50f32/60f32) * loss;
+                loss = row.ground_truth;
             }
         }
 
         // Insert all rows into the database
-        for i in 0..data.len() {
-            let feats = &training_data[i];
+        for row in &rows  {
             let mut params:Vec<rusqlite::types::Value> = Vec::new();
 
-            params.push(game_ids[i].into());
-            params.push(move_indexes[i].into());
-            params.push(format!("{:?}", states[i]).into());
-            params.push(ground_truths[i].into());
+            params.push(row.game_id.into());
+            params.push(row.move_index.into());
+            params.push(format!("{:?}", row.state).into());
+            params.push(row.ground_truth.into());
             
-            for value in feats.0.values() {
+            for value in row.features.0.values() {
                 params.push(value.into());
             }
             
-            for value in feats.1.values() {
+            for value in row.features.1.values() {
                 params.push(value.into());
             }
             
@@ -274,8 +279,9 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::
     }
 
     tx.commit()?;
+    let duration = start.elapsed().as_secs();
 
-    println!("Wrote {} training records to {}", data.len(), output_db_path);
+    println!("Wrote {} training records to {} in {:?}s", data.len(), output_db_path, duration);
     Ok(())
 }
 
