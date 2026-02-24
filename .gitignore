@@ -5,6 +5,7 @@ build_rel/
 /CMakeSettings.json
 database.db
 training.duckdb
+train/__pycache__/
 
 
 # Added by cargo

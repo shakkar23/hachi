@@ -20,7 +20,6 @@ conn.close()
 df = df.drop(columns=[
     "game_id",
     "move_index",
-    "state",
 ])
 
 print(df)
