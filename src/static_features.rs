@@ -185,6 +185,29 @@ pub fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usiz
     (tslots, donations)
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_donations() {
+        let mut board = Board::new();
+        board.cols[0] = 0b111;
+        board.cols[1] = 0b101;
+        board.cols[2] = 0b000;
+        board.cols[3] = 0b001;
+        board.cols[4] = 0b111;
+        board.cols[5] = 0b111;
+        board.cols[6] = 0b111;
+        board.cols[7] = 0b111;
+        board.cols[8] = 0b111;
+        board.cols[9] = 0b111;
+        let mut heights = board.heights();
+        assert_eq!(sunbeam_donations(&mut board, &mut heights, 2).0 ,[0,0,1,0]);
+    }
+}
+
 pub fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i32 {
     let mut holes = 0i32;
 
@@ -232,9 +255,9 @@ pub fn get_static_features(game:&GameState) -> StaticFeatures {
     let board = game.board;
     let sunbeam_heights = board.heights();
     let (sunbeam_well, sunbeam_well_x_pos) = sunbeam_well(&board, &sunbeam_heights);
-    let mut donated_board = board;
-    let mut donated_heights = sunbeam_heights;
-    let (sunbeam_t_slots, sunbeam_donations) = sunbeam_donations(&mut donated_board, &mut donated_heights, 2);
+    let mut board_copy = board;
+    let mut heights_copy = sunbeam_heights;
+    let (sunbeam_t_slots, sunbeam_donations) = sunbeam_donations(&mut board_copy, &mut heights_copy, 2);
     let cc_holes = cc_count_holes(&board, &sunbeam_heights);
     let cc_coveredness = cc_coveredness(&board);
     let cc_row_transitions = cc_row_transitions(&board);
@@ -244,7 +267,7 @@ pub fn get_static_features(game:&GameState) -> StaticFeatures {
         sunbeam_bumpiness: sunbeam_bumpiness(&sunbeam_heights, sunbeam_well_x_pos),
         sunbeam_well_x: sunbeam_well_x_pos,
         sunbeam_well_depth:sunbeam_well,
-        sunbeam_max_donated_height:*donated_heights.iter().max().unwrap(),
+        sunbeam_max_donated_height:*heights_copy.iter().max().unwrap(),
         sunbeam_n_donations:sunbeam_donations,
         sunbeam_t_clears:sunbeam_t_slots,
         cc_holes:cc_holes,

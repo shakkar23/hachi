@@ -15,11 +15,18 @@ t = time.perf_counter()
 
 # Create XGBoost regressor
 xgb_model = xgb.XGBRegressor(
-    n_estimators=150,
-    max_depth=15,
-    learning_rate=0.1,
+    max_depth=10,
+    learning_rate=0.05,
+    n_estimators=500,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    min_child_weight=5,
+    gamma=0.1,
+    reg_lambda=1,
+    reg_alpha=0.1,
     random_state=42,
-    n_jobs=-1
+    n_jobs=-1,
+    eval_metric=['rmse', 'mae']
 )
 
 # Train the model
@@ -37,5 +44,4 @@ print(f"Mean Squared Error: {mse:.4f}")
 print(f"MSE Legend. 0.01 : Good. 0.05 : Fine. 0.1 : Weak. 0.25 : Worst")
 print(f"R² Score: {r2:.4f}")
 
-plot_importance(xgb_model, max_num_features=50)
-plt.show()
+xgb_model.save_model("model.ubj") 

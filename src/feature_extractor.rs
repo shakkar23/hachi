@@ -9,6 +9,7 @@ pub struct Features {
     pub heights:[u32;10],
     pub height_differences:[i32;9],
     pub first_hole_depths:[i32;10],
+    pub garbage_holes:[i32;20],
     pub piece_distance:[i32;7],
     pub piece_counts:[i32;7],
     pub hold_or_current_onehot:[i32;7],
@@ -36,6 +37,7 @@ pub fn extract_features(game: &game::GameState) -> Features {
         heights: hf.heights,
         height_differences: hf.height_differences,
         first_hole_depths: hf.first_hole_depths,
+        garbage_holes: hf.garbage_holes,
         piece_distance: hf.piece_distance,
         piece_counts: hf.piece_counts,
         hold_or_current_onehot: hf.hold_or_current_onehot,
@@ -83,6 +85,10 @@ impl Features {
         // first_hole_depths array
         for i in 0..10 {
             columns.push(format!("{}_{}{}{}", prefix, "first_hole_depths", i, type_suffix));
+        }
+
+        for i in 0..10 {
+            columns.push(format!("{}_{}{}{}", prefix, "garbage_holes", i, type_suffix));
         }
         
         // piece_distance array
@@ -133,7 +139,15 @@ impl Features {
 
     pub fn sql_placeholders() -> String {
         let count = 
-                    10 + 9 + 10 + 7 + 7 + 7 + 7 + 512 +  // arrays
+                    10 + // heights
+                    9 + // height differences
+                    10 + // first hole depths
+                    20 + // garbage holes
+                    7 + // piece_distance
+                    7 +  // piece counts
+                    7 +  // hold or current
+                    7 +  // next
+                    512 +  // 3x3s
                     6 +  // sunbeam scalars
                     4 +  // sunbeam_t_clears
                     3;   // cc scalars
@@ -161,6 +175,11 @@ impl Features {
             vals.push(rusqlite::types::Value::from(fhd as i64));
         }
         
+        // garbage_holes array
+        for &gh in &self.garbage_holes {
+            vals.push(rusqlite::types::Value::from(gh as i64));
+        }
+
         // piece_distance array
         for &pd in &self.piece_distance {
             vals.push(rusqlite::types::Value::from(pd as i64));

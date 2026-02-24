@@ -24,7 +24,7 @@ fn get_first_hole_depths(board: &Board) -> [i32; 10] {
     let mut depths = [0; 10];
 
     for x in 0..10 {
-        depths[x] = board.cols[x].trailing_ones() as i32;
+        depths[x] = board.cols[x].leading_ones() as i32;
         if heights[x] as i32 == depths[x] {
             depths[x] = 0;
         }
@@ -33,9 +33,26 @@ fn get_first_hole_depths(board: &Board) -> [i32; 10] {
     depths
 }
 
-// next 10 garbage holes
-fn get_garbage_hole_sequence(board: &Board) -> [i32; 10] {
-    [0; 10]
+// locations of all garbage holes
+fn get_garbage_hole_sequence(board: &Board) -> [i32; 20] {
+    let locations = [-1;20];
+    for y in 0..20 {
+        let xs = &board.cols.iter().map(|col| {
+            (col >> y) & 1
+        });
+        let sum = 0;
+        for x in 1..10 {
+            sum += xs[x];
+            if xs[x] == 0 {
+                locations[y] = x;
+            }
+        }
+        if sum != 9 {
+            locations[y] = -1;
+        }
+    }
+
+    locations
 }
 
 fn get_distance_to_next_piece(gamestate: &GameState) -> [i32; 7] {
@@ -93,10 +110,9 @@ fn get_next_piece(gamestate: &GameState) -> [i32; 7] {
 
 fn get_3x3s(board: &Board) -> [i32; 512] {
     let mut counts = [0; 512];
-    let height = board.heights().iter().copied().max().unwrap() as usize;
 
     for x in 0..7 {
-        for y in 0..height {
+        for y in 0..61 {
             let mask = [0b111 << y, 0b111 << y, 0b111 << y];
             let cols = &board.cols[x..=x+2];
             let window = [
@@ -115,6 +131,7 @@ pub struct HachiFeatures {
     pub heights:[u32;10],
     pub height_differences:[i32;9],
     pub first_hole_depths:[i32;10],
+    pub garbage_holes:[i32;20],
     pub piece_distance:[i32;7],
     pub piece_counts:[i32;7],
     pub hold_or_current_onehot:[i32;7],
@@ -128,6 +145,7 @@ pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
         heights: get_heights(&board),
         height_differences: get_height_differences(&board),
         first_hole_depths: get_first_hole_depths(&board),
+        garbage_holes: get_garbage_hole_sequence(&board),
         piece_distance: get_distance_to_next_piece(&gamestate),
         piece_counts: get_count_of_pieces(&gamestate),
         hold_or_current_onehot: get_hold_or_current_piece(&gamestate),

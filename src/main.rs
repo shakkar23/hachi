@@ -251,7 +251,7 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::
             if row.ground_truth != 0f32 {
                 loss = row.ground_truth;
             } else {
-                row.ground_truth = (50f32/60f32) * loss;
+                row.ground_truth = (45f32/60f32) * loss;
                 loss = row.ground_truth;
             }
         }
