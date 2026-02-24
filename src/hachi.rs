@@ -35,16 +35,17 @@ fn get_first_hole_depths(board: &Board) -> [i32; 10] {
 
 // locations of all garbage holes
 fn get_garbage_hole_sequence(board: &Board) -> [i32; 20] {
-    let locations = [-1;20];
+    let mut locations = [-1; 20];
     for y in 0..20 {
-        let xs = &board.cols.iter().map(|col| {
-            (col >> y) & 1
-        });
-        let sum = 0;
+        let xs: Vec<i32> = board.cols.iter().map(|col| {
+            ((col >> y) & 1) as i32
+        }).collect();
+        
+        let mut sum = 0;
         for x in 1..10 {
             sum += xs[x];
             if xs[x] == 0 {
-                locations[y] = x;
+                locations[y] = x as i32;
             }
         }
         if sum != 9 {
