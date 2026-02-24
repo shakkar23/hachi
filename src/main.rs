@@ -1,5 +1,4 @@
 use tetris::{board::Board, piece::Piece, piece::Rotation};
-use rusqlite::{Connection, Result};
 use std::{env, fs::exists};
 use rayon::prelude::*;
 use std::time::Instant;
@@ -90,6 +89,9 @@ const char* sql =
 */
 
 fn extract_data(db_path:String) -> Vec<Datum> {
+    
+    use rusqlite::{Connection, Result};
+
     let conn = Connection::open(&db_path).unwrap();
     
     let mut stmt = conn.prepare("SELECT 
@@ -186,117 +188,129 @@ fn extract_data(db_path:String) -> Vec<Datum> {
     return data_iter.map(|e|e.unwrap()).collect();
 }
 
-fn create_dataset(data: &[Datum], output_db_path: &str) -> Result<(), rusqlite::Error> {
+use duckdb::{Connection, Appender, Result as DuckResult};
+
+fn create_dataset(data: &[Datum], output_db_path: &str) -> DuckResult<()> {
     let start = Instant::now();
 
     let mut conn = Connection::open(output_db_path)?;
-    
+
     let tx = conn.transaction()?;
-    
-    tx.execute("DROP TABLE IF EXISTS training_data", []);
-    
-    // Create the training data table
+
+    tx.execute("DROP TABLE IF EXISTS training_data", [])?;
+
     tx.execute(
-        &format!("CREATE TABLE IF NOT EXISTS training_data (
-            game_id INTEGER NOT NULL,
-            move_index INTEGER NOT NULL,
-            state TEXT NOT NULL,
-            ground_truth REAL NOT NULL,
-            {},
-            {},
-            PRIMARY KEY (game_id, move_index)
-        )",
+        &format!(
+            "CREATE TABLE IF NOT EXISTS training_data (
+                game_id       INTEGER NOT NULL,
+                move_index    INTEGER NOT NULL,
+                state TEXT NOT NULL,
+                ground_truth  REAL NOT NULL,
+                {},
+                {},
+                PRIMARY KEY (game_id, move_index)
+            )",
             Features::sql_columns_with_types("p1"),
             Features::sql_columns_with_types("p2"),
-        ), []
+        ),
+        [],
     )?;
 
-    {
-        // Prepare the insert statement
-        let mut stmt = tx.prepare(
-            &format!(
-                "INSERT OR REPLACE INTO training_data (game_id, move_index, state, ground_truth, {}, {}) VALUES (?,?,?,?,{}, {})",
-                Features::sql_columns("p1"),
-                Features::sql_columns("p2"),
-                Features::sql_placeholders(),
-                Features::sql_placeholders()
-            )
-        )?;
+    // -------------------------------------------------------------------------
+    // Prepare data in memory (same as before)
+    // -------------------------------------------------------------------------
+    struct Row {
+        game_id:     u16,
+        move_index:  u16,
+        state:       State,
+        ground_truth: f32,
+        features:    (Features, Features),
+    }
 
-        struct Row {
-            pub features:(Features, Features),
-            pub state:State,
-            pub game_id:u16,
-            pub move_index: u16,
-            pub ground_truth: f32
-        }
+    let mut rows: Vec<Row> = data.iter()
+        .map(|d| {
+            let p1_attrs = feature_extractor::extract_features(&d.p1);
+            let p2_attrs = feature_extractor::extract_features(&d.p2);
 
-        let mut rows: Vec<Row> = data.par_iter()
-            .map(|d| {
-                let p1_attrs = feature_extractor::extract_features(&d.p1);
-                let p2_attrs = feature_extractor::extract_features(&d.p2);
-
-                Row {
-                    features: (p1_attrs, p2_attrs),
-                    state: d.state,
-                    game_id: d.game_id,
-                    move_index: d.move_index,
-                    ground_truth: to_death_value(&d.state).unwrap()
-                }
-            })
-            .collect();
-
-        let mut loss: f32 = 1f32;
-        for row in rows.iter_mut().rev() {
-            if row.ground_truth != 0f32 {
-                loss = row.ground_truth;
-            } else {
-                row.ground_truth = (45f32/60f32) * loss;
-                loss = row.ground_truth;
+            Row {
+                features: (p1_attrs, p2_attrs),
+                state: d.state.clone(),           // assuming State: Clone
+                game_id: d.game_id,
+                move_index: d.move_index,
+                ground_truth: to_death_value(&d.state).unwrap(),
             }
+        })
+        .collect();
+
+    let mut loss = 1f32;
+    for row in rows.iter_mut().rev() {
+        if row.ground_truth != 0f32 {
+            loss = row.ground_truth;
+        } else {
+            row.ground_truth = (45f32 / 60f32) * loss;
+            loss = row.ground_truth;
         }
+    }
 
-        // Insert all rows into the database
-        for row in &rows  {
-            let mut params:Vec<rusqlite::types::Value> = Vec::new();
+    let mut stmt = tx.prepare(
+        &format!(
+            "INSERT OR REPLACE INTO training_data (game_id, move_index, state, ground_truth, {}, {}) VALUES (?,?,?,?,{}, {})",
+            Features::sql_columns("p1"),
+            Features::sql_columns("p2"),
+            Features::sql_placeholders(),
+            Features::sql_placeholders()
+        )
+    )?;
+    
+    for row in &rows  {
+        let mut params:Vec<duckdb::types::Value> = Vec::new();
 
-            params.push(row.game_id.into());
-            params.push(row.move_index.into());
-            params.push(format!("{:?}", row.state).into());
-            params.push(row.ground_truth.into());
-            
-            for value in row.features.0.values() {
-                params.push(value.into());
-            }
-            
-            for value in row.features.1.values() {
-                params.push(value.into());
-            }
-            
-            stmt.execute(rusqlite::params_from_iter(params))?;
+        params.push(row.game_id.into());
+        params.push(row.move_index.into());
+        params.push(format!("{:?}", row.state).into());
+        params.push(row.ground_truth.into());
+        
+        for value in row.features.0.values() {
+            params.push(value.into());
         }
-
+        
+        for value in row.features.1.values() {
+            params.push(value.into());
+        }
+        
+        stmt.execute(duckdb::params_from_iter(params))?;
     }
 
     tx.commit()?;
-    let duration = start.elapsed().as_secs();
 
-    println!("Wrote {} training records to {} in {:?}s", data.len(), output_db_path, duration);
+    let duration = start.elapsed().as_secs_f64();
+
+    println!(
+        "Wrote {} training records to {} in {:.1}s",
+        data.len(),
+        output_db_path,
+        duration
+    );
+
     Ok(())
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() == 1 {
-        println!("please put in a db path for arg 1");
+        println!("Please provide an input database path.");
+        return;
+    }
+    if args.len() == 2 {
+        println!("Please provide an output database path.");
         return;
     }
     if !exists(args[1].to_string()).unwrap() {
-        println!("your file does not exist!");
+        println!("Input database not found.");
         return;
     }
     let data = extract_data(args[1].to_string());
-    if let Err(e) = create_dataset(&data, &args[1].to_string()) {
+    if let Err(e) = create_dataset(&data, &args[2].to_string()) {
         println!("Error creating dataset: {}", e);
     }
 }

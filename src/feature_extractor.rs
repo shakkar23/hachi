@@ -1,10 +1,7 @@
-use struct_iterable::Iterable;
-
 use crate::hachi;
 use crate::game;
 use crate::static_features;
 
-#[derive(Iterable)]
 pub struct Features {
     pub heights:[u32;10],
     pub height_differences:[i32;9],
@@ -15,6 +12,7 @@ pub struct Features {
     pub hold_or_current_onehot:[i32;7],
     pub next_onehot:[i32;7],
     pub all_3x3s:[i32;512],
+    pub all_3x3s_with_x:[i32;5120],
 
     pub sunbeam_max_height:u32,
     pub sunbeam_bumpiness:i32,
@@ -43,6 +41,7 @@ pub fn extract_features(game: &game::GameState) -> Features {
         hold_or_current_onehot: hf.hold_or_current_onehot,
         next_onehot: hf.next_onehot,
         all_3x3s: hf.all_3x3s,
+        all_3x3s_with_x: hf.all_3x3s_with_x,
 
         sunbeam_max_height: sf.sunbeam_max_height,
         sunbeam_bumpiness: sf.sunbeam_bumpiness,
@@ -70,7 +69,7 @@ impl Features {
     fn sql_columns_with_options(prefix: &str, include_types: bool) -> String {
         let mut columns = Vec::new();
         
-        let type_suffix = if include_types { " INTEGER NOT NULL" } else { "" };
+        let type_suffix = if include_types { " TINYINT NOT NULL" } else { "" };
         
         // heights array
         for i in 0..10 {
@@ -87,7 +86,7 @@ impl Features {
             columns.push(format!("{}_{}{}{}", prefix, "first_hole_depths", i, type_suffix));
         }
 
-        for i in 0..10 {
+        for i in 0..20 {
             columns.push(format!("{}_{}{}{}", prefix, "garbage_holes", i, type_suffix));
         }
         
@@ -114,6 +113,11 @@ impl Features {
         // all_3x3s array
         for i in 0..512 {
             columns.push(format!("{}_{}{}{}", prefix, "all_3x3s", i, type_suffix));
+        }
+        
+        // all_3x3s_with_x array
+        for i in 0..5120 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_x", i, type_suffix));
         }
         
         // sunbeam scalar fields
@@ -148,6 +152,7 @@ impl Features {
                     7 +  // hold or current
                     7 +  // next
                     512 +  // 3x3s
+                    5120 + // 3x3s with x
                     6 +  // sunbeam scalars
                     4 +  // sunbeam_t_clears
                     3;   // cc scalars
@@ -157,72 +162,77 @@ impl Features {
 }
 
 impl Features {
-    pub fn values(&self) -> Vec<rusqlite::types::Value> {
+    pub fn values(&self) -> Vec<i8> {
         let mut vals = Vec::new();
         
         // heights array
         for &h in &self.heights {
-            vals.push(rusqlite::types::Value::from(h as i64));
+            vals.push(i8::from(h as i8));
         }
         
         // height_differences array
         for &hd in &self.height_differences {
-            vals.push(rusqlite::types::Value::from(hd as i64));
+            vals.push(i8::from(hd as i8));
         }
         
         // first_hole_depths array
         for &fhd in &self.first_hole_depths {
-            vals.push(rusqlite::types::Value::from(fhd as i64));
+            vals.push(i8::from(fhd as i8));
         }
         
         // garbage_holes array
         for &gh in &self.garbage_holes {
-            vals.push(rusqlite::types::Value::from(gh as i64));
+            vals.push(i8::from(gh as i8));
         }
 
         // piece_distance array
         for &pd in &self.piece_distance {
-            vals.push(rusqlite::types::Value::from(pd as i64));
+            vals.push(i8::from(pd as i8));
         }
         
         // piece_counts array
         for &pc in &self.piece_counts {
-            vals.push(rusqlite::types::Value::from(pc as i64));
+            vals.push(i8::from(pc as i8));
         }
         
         // hold_or_current_onehot array
         for &hoc in &self.hold_or_current_onehot {
-            vals.push(rusqlite::types::Value::from(hoc as i64));
+            vals.push(i8::from(hoc as i8));
         }
         
         // next_onehot array
         for &no in &self.next_onehot {
-            vals.push(rusqlite::types::Value::from(no as i64));
+            vals.push(i8::from(no as i8));
         }
 
         // 3x3s
         for &no in &self.all_3x3s {
-            vals.push(rusqlite::types::Value::from(no as i64));
+            vals.push(i8::from(no as i8));
+        }
+        
+        // 3x3s with x
+        for &no in &self.all_3x3s_with_x {
+            vals.push(i8::from(no as i8));
         }
         
         
         // sunbeam scalar fields
-        vals.push(rusqlite::types::Value::from(self.sunbeam_max_height as i64));
-        vals.push(rusqlite::types::Value::from(self.sunbeam_bumpiness as i64));
-        vals.push(rusqlite::types::Value::from(self.sunbeam_well_x as i64));
-        vals.push(rusqlite::types::Value::from(self.sunbeam_well_depth as i64));
-        vals.push(rusqlite::types::Value::from(self.sunbeam_max_donated_height as i64));
-        vals.push(rusqlite::types::Value::from(self.sunbeam_n_donations as i64));
+        vals.push(i8::from(self.sunbeam_max_height as i8));
+        vals.push(i8::from(self.sunbeam_bumpiness as i8));
+        vals.push(i8::from(self.sunbeam_well_x as i8));
+        vals.push(i8::from(self.sunbeam_well_depth as i8));
+        vals.push(i8::from(self.sunbeam_max_donated_height as i8));
+        vals.push(i8::from(self.sunbeam_n_donations as i8));
         
         // sunbeam_t_clears array
         for &tc in &self.sunbeam_t_clears {
-            vals.push(rusqlite::types::Value::from(tc as i64));
+            vals.push(i8::from(tc as i8));
         }
         
         // cc scalar fields
-        vals.push(rusqlite::types::Value::from(self.cc_holes as i64));
-        vals.push(rusqlite::types::Value::from(self.cc_coveredness as i64));
-        vals.push(rusqlite::types::Value::from(self.cc_row_transitions as i64));
+        vals.push(i8::from(self.cc_holes as i8));
+        vals.push(i8::from(self.cc_coveredness as i8));
+        vals.push(i8::from(self.cc_row_transitions as i8));
         
         vals
     }

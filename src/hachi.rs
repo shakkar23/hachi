@@ -109,8 +109,9 @@ fn get_next_piece(gamestate: &GameState) -> [i32; 7] {
     onehot
 }
 
-fn get_3x3s(board: &Board) -> [i32; 512] {
+fn get_3x3s(board: &Board) -> ([i32; 512], [i32; 5120]) {
     let mut counts = [0; 512];
+    let mut counts_with_x = [0; 5120];
 
     for x in 0..7 {
         for y in 0..61 {
@@ -122,10 +123,11 @@ fn get_3x3s(board: &Board) -> [i32; 512] {
                 (cols[2] & mask[2]) >> y
             ];
             counts[(window[0] | (window[1] << 3) | (window[2] << 6)) as usize] += 1;
+            counts_with_x[((window[0] | (window[1] << 3) | (window[2] << 6)) * (x+1) as u64) as usize] += 1;
         }
     }
 
-    counts
+    (counts, counts_with_x)
 }
 
 pub struct HachiFeatures {
@@ -137,11 +139,13 @@ pub struct HachiFeatures {
     pub piece_counts:[i32;7],
     pub hold_or_current_onehot:[i32;7],
     pub next_onehot:[i32;7],
-    pub all_3x3s:[i32;512]
+    pub all_3x3s:[i32;512],
+    pub all_3x3s_with_x:[i32;5120]
 }
 
 pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
     let mut board = gamestate.board;
+    let (all_3x3s, all_3x3s_with_x) = get_3x3s(&board);
     HachiFeatures {
         heights: get_heights(&board),
         height_differences: get_height_differences(&board),
@@ -151,6 +155,7 @@ pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
         piece_counts: get_count_of_pieces(&gamestate),
         hold_or_current_onehot: get_hold_or_current_piece(&gamestate),
         next_onehot: get_next_piece(&gamestate),
-        all_3x3s: get_3x3s(&board)
+        all_3x3s: all_3x3s,
+        all_3x3s_with_x: all_3x3s_with_x
     }
 }

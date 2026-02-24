@@ -4,6 +4,7 @@ build_rel/
 /.vs
 /CMakeSettings.json
 database.db
+training.duckdb
 
 
 # Added by cargo
