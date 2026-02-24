@@ -1,14 +1,19 @@
-import sqlite3
+import duckdb
 import pandas as pd
 from sklearn.model_selection import train_test_split
+import time
 
-DATABASE_PATH = "./database.db"
+DATABASE_PATH = "./training.duckdb"
 
-conn = sqlite3.connect(DATABASE_PATH)
+conn = duckdb.connect(DATABASE_PATH)
 
 sql_query = "SELECT * FROM training_data"
 
-df = pd.read_sql_query(sql_query, conn)
+t = time.perf_counter()
+
+df = conn.execute(sql_query).fetchdf()
+
+print(f"Loaded training data in {time.perf_counter() - t:.4f}s")
 
 conn.close()
 

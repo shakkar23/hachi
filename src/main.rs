@@ -3,12 +3,20 @@ use std::{env, fs::exists};
 use rayon::prelude::*;
 use std::time::Instant;
 
+use duckdb::arrow::record_batch::RecordBatch;
+
+use rusqlite::{Connection, Result};
+use duckdb::{Connection as DuckConnection, Result as DuckResult};
+
 mod hachi;
 mod static_features;
 mod game;
 mod feature_extractor;
+mod arrow;
 
-use crate::feature_extractor::Features;
+use crate::feature_extractor::{Features, Row};
+
+use crate::arrow::rows_to_record_batch;
 
 use crate::game::{GameState,Move,Datum,State};
 
@@ -89,8 +97,6 @@ const char* sql =
 */
 
 fn extract_data(db_path:String) -> Vec<Datum> {
-    
-    use rusqlite::{Connection, Result};
 
     let conn = Connection::open(&db_path).unwrap();
     
@@ -188,23 +194,18 @@ fn extract_data(db_path:String) -> Vec<Datum> {
     return data_iter.map(|e|e.unwrap()).collect();
 }
 
-use duckdb::{Connection, Appender, Result as DuckResult};
-
 fn create_dataset(data: &[Datum], output_db_path: &str) -> DuckResult<()> {
     let start = Instant::now();
 
-    let mut conn = Connection::open(output_db_path)?;
+    let conn = DuckConnection::open(output_db_path)?;
 
-    let tx = conn.transaction()?;
+    conn.execute("DROP TABLE IF EXISTS training_data", [])?;
 
-    tx.execute("DROP TABLE IF EXISTS training_data", [])?;
-
-    tx.execute(
+    conn.execute(
         &format!(
             "CREATE TABLE IF NOT EXISTS training_data (
                 game_id       INTEGER NOT NULL,
                 move_index    INTEGER NOT NULL,
-                state TEXT NOT NULL,
                 ground_truth  REAL NOT NULL,
                 {},
                 {},
@@ -216,25 +217,14 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> DuckResult<()> {
         [],
     )?;
 
-    // -------------------------------------------------------------------------
-    // Prepare data in memory (same as before)
-    // -------------------------------------------------------------------------
-    struct Row {
-        game_id:     u16,
-        move_index:  u16,
-        state:       State,
-        ground_truth: f32,
-        features:    (Features, Features),
-    }
-
-    let mut rows: Vec<Row> = data.iter()
+    let mut rows: Vec<Row> = data.par_iter()
         .map(|d| {
             let p1_attrs = feature_extractor::extract_features(&d.p1);
             let p2_attrs = feature_extractor::extract_features(&d.p2);
 
             Row {
                 features: (p1_attrs, p2_attrs),
-                state: d.state.clone(),           // assuming State: Clone
+                state: d.state,
                 game_id: d.game_id,
                 move_index: d.move_index,
                 ground_truth: to_death_value(&d.state).unwrap(),
@@ -252,38 +242,28 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> DuckResult<()> {
         }
     }
 
-    let mut stmt = tx.prepare(
-        &format!(
-            "INSERT OR REPLACE INTO training_data (game_id, move_index, state, ground_truth, {}, {}) VALUES (?,?,?,?,{}, {})",
-            Features::sql_columns("p1"),
-            Features::sql_columns("p2"),
-            Features::sql_placeholders(),
-            Features::sql_placeholders()
-        )
-    )?;
+    let mut duration = start.elapsed().as_secs_f64();
+
+    println!(
+        "Feature extraction took {:.1}s",
+        duration
+    );
     
-    for row in &rows  {
-        let mut params:Vec<duckdb::types::Value> = Vec::new();
+    let mut record_batch = rows_to_record_batch(&rows).unwrap();
 
-        params.push(row.game_id.into());
-        params.push(row.move_index.into());
-        params.push(format!("{:?}", row.state).into());
-        params.push(row.ground_truth.into());
-        
-        for value in row.features.0.values() {
-            params.push(value.into());
-        }
-        
-        for value in row.features.1.values() {
-            params.push(value.into());
-        }
-        
-        stmt.execute(duckdb::params_from_iter(params))?;
-    }
+    duration = start.elapsed().as_secs_f64();
+    
+    println!(
+        "Record Batch preparation took {:.1}s",
+        duration
+    );
 
-    tx.commit()?;
+    let mut appender = conn.appender("training_data")?;
 
-    let duration = start.elapsed().as_secs_f64();
+    appender.append_record_batch(record_batch)?;
+    appender.flush()?;
+
+    duration = start.elapsed().as_secs_f64();
 
     println!(
         "Wrote {} training records to {} in {:.1}s",

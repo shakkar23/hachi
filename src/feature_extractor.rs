@@ -4,28 +4,37 @@ use crate::static_features;
 
 pub struct Features {
     pub heights:[u32;10],
-    pub height_differences:[i32;9],
-    pub first_hole_depths:[i32;10],
-    pub garbage_holes:[i32;20],
-    pub piece_distance:[i32;7],
-    pub piece_counts:[i32;7],
-    pub hold_or_current_onehot:[i32;7],
-    pub next_onehot:[i32;7],
-    pub all_3x3s:[i32;512],
-    pub all_3x3s_with_x:[i32;5120],
+    pub height_differences:[i8;9],
+    pub first_hole_depths:[i8;10],
+    pub garbage_holes:[i8;20],
+    pub piece_distance:[i8;7],
+    pub piece_counts:[i8;7],
+    pub hold_or_current_onehot:[i8;7],
+    pub next_onehot:[i8;7],
+    pub all_3x3s:[i8;512],
+    pub all_3x3s_with_x:[i8;5120],
 
     pub sunbeam_max_height:u32,
-    pub sunbeam_bumpiness:i32,
+    pub sunbeam_bumpiness:i8,
     pub sunbeam_well_x:usize,
-    pub sunbeam_well_depth:i32,
+    pub sunbeam_well_depth:i8,
     pub sunbeam_max_donated_height:u32,
-    pub sunbeam_n_donations:i32,
-    pub sunbeam_t_clears:[i32;4],
+    pub sunbeam_n_donations:i8,
+    pub sunbeam_t_clears:[i8;4],
 
-    pub cc_holes:i32,
-    pub cc_coveredness:i32,
-    pub cc_row_transitions:i32
+    pub cc_holes:i8,
+    pub cc_coveredness:i8,
+    pub cc_row_transitions:i8
 }
+
+pub struct Row {
+    pub game_id:     u16,
+    pub move_index:  u16,
+    pub state:       game::State,
+    pub ground_truth: f32,
+    pub features:    (Features, Features),
+}
+
 
 pub fn extract_features(game: &game::GameState) -> Features {
     let sf = static_features::get_static_features(&game);
@@ -117,7 +126,7 @@ impl Features {
         
         // all_3x3s_with_x array
         for i in 0..5120 {
-            columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_x", i, type_suffix));
+            //columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_x", i, type_suffix));
         }
         
         // sunbeam scalar fields
@@ -141,23 +150,25 @@ impl Features {
         columns.join(", ")
     }
 
+    pub const count:usize =
+        10 + // heights
+        9 + // height differences
+        10 + // first hole depths
+        20 + // garbage holes
+        7 + // piece_distance
+        7 +  // piece counts
+        7 +  // hold or current
+        7 +  // next
+        512 +  // 3x3s
+        //5120 + // 3x3s with x
+        6 +  // sunbeam scalars
+        4 +  // sunbeam_t_clears
+        3   // cc scalars
+    ;
+
     pub fn sql_placeholders() -> String {
-        let count = 
-                    10 + // heights
-                    9 + // height differences
-                    10 + // first hole depths
-                    20 + // garbage holes
-                    7 + // piece_distance
-                    7 +  // piece counts
-                    7 +  // hold or current
-                    7 +  // next
-                    512 +  // 3x3s
-                    5120 + // 3x3s with x
-                    6 +  // sunbeam scalars
-                    4 +  // sunbeam_t_clears
-                    3;   // cc scalars
         
-        vec!["?"; count].join(", ")
+        vec!["?"; Features::count].join(", ")
     }
 }
 
@@ -212,7 +223,7 @@ impl Features {
         
         // 3x3s with x
         for &no in &self.all_3x3s_with_x {
-            vals.push(i8::from(no as i8));
+            //vals.push(i8::from(no as i8));
         }
         
         

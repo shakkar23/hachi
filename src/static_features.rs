@@ -7,19 +7,19 @@ use crate::game::{GameState};
 
 pub struct StaticFeatures {
     pub sunbeam_max_height:u32,
-    pub sunbeam_bumpiness:i32,
+    pub sunbeam_bumpiness:i8,
     pub sunbeam_well_x:usize,
-    pub sunbeam_well_depth:i32,
+    pub sunbeam_well_depth:i8,
     pub sunbeam_max_donated_height:u32,
-    pub sunbeam_n_donations:i32,
-    pub sunbeam_t_clears:[i32;4],
-    pub cc_holes:i32,
-    pub cc_coveredness:i32,
-    pub cc_row_transitions:i32
+    pub sunbeam_n_donations:i8,
+    pub sunbeam_t_clears:[i8;4],
+    pub cc_holes:i8,
+    pub cc_coveredness:i8,
+    pub cc_row_transitions:i8
 }
 
 // Return the well's depth and the position of the well
-pub fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i32, usize) {
+pub fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i8, usize) {
     let mut x = 0;
 
     for i in 1..10 {
@@ -40,10 +40,10 @@ pub fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i32, usize) {
 
     mask >>= heights[x];
 
-    (mask.count_ones() as i32, x)
+    (mask.count_ones() as i8, x)
 }
 
-pub fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i32 {
+pub fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i8 {
     let mut bumpiness = 0;
     let mut left = 0;
 
@@ -62,11 +62,11 @@ pub fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i32 {
         left = i;
     }
 
-    bumpiness as i32
+    bumpiness as i8
 }
 
 // Get the number of holes overground and underground
-pub fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i32, i32) {
+pub fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i8, i8) {
     let min_height = heights[well_x];
 
     let mut holes = 0;
@@ -75,7 +75,7 @@ pub fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i32,
         holes += heights[i] - min_height - (board.cols[i] >> min_height).count_ones();
     }
 
-    (holes as i32, min_height as i32)
+    (holes as i8, min_height as i8)
 }
 
 // Find the highest tslot
@@ -157,7 +157,7 @@ pub fn sunbeam_tslot(board: &Board, heights: &[u32; 10]) -> Option<Move> {
     None
 }
 
-pub fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i32; 4], i32) {
+pub fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i8; 4], i8) {
     let mut tslots = [0; 4];
     let mut donations = 0;
 
@@ -208,8 +208,8 @@ mod tests {
     }
 }
 
-pub fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i32 {
-    let mut holes = 0i32;
+pub fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i8 {
+    let mut holes = 0i8;
 
     for x in 0..10 {
         let h = heights[x];
@@ -218,13 +218,13 @@ pub fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i32 {
         }
         let underneath = (1u64 << h) - 1;
         let empty_bits = (!board.cols[x]) & underneath;
-        holes += empty_bits.count_ones() as i32;
+        holes += empty_bits.count_ones() as i8;
     }
 
     holes
 }
 
-pub fn cc_coveredness(board: &Board) -> i32 {
+pub fn cc_coveredness(board: &Board) -> i8 {
     let mut coveredness = 0;
     for &c in &board.cols {
         let height = 64 - c.leading_zeros();
@@ -232,7 +232,7 @@ pub fn cc_coveredness(board: &Board) -> i32 {
         let mut holes = !c & underneath;
         while holes != 0 {
             let y = holes.trailing_zeros();
-            coveredness += (height - y) as i32;
+            coveredness += (height - y) as i8;
             holes &= !(1 << y);
         }
     }
@@ -240,7 +240,7 @@ pub fn cc_coveredness(board: &Board) -> i32 {
     coveredness
 }
 
-pub fn cc_row_transitions(board: &Board) -> i32 {
+pub fn cc_row_transitions(board: &Board) -> i8 {
     let mut row_transitions = 0;
     row_transitions += (!0 ^ board.cols[0]).count_ones();
     row_transitions += (!0 ^ board.cols[9]).count_ones();
@@ -248,7 +248,7 @@ pub fn cc_row_transitions(board: &Board) -> i32 {
         row_transitions += (cs[0] ^ cs[1]).count_ones();
     }
 
-    row_transitions as i32
+    row_transitions as i8
 }
 
 pub fn get_static_features(game:&GameState) -> StaticFeatures {

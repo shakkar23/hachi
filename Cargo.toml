@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 tetris = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
 struct_iterable = "0.1.1"
-duckdb = { version = "1.4.4", features = ["bundled"] }
+duckdb = { version = "1.4.4", features = ["bundled", "appender-arrow"] }
+arrow-array = "56.2.0"
 rayon = "1.7"
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 itertools = "0.12"

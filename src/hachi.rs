@@ -7,25 +7,25 @@ fn get_heights(board: &Board) -> [u32; 10] {
     heights
 }
 
-fn get_height_differences(board: &Board) -> [i32; 9] {
+fn get_height_differences(board: &Board) -> [i8; 9] {
     let mut heights = board.heights();
     let mut diffs = [0; 9];
 
     for x in 0..9 {
-        diffs[x] = (heights[x+1] as i32 - heights[x] as i32);
+        diffs[x] = (heights[x+1] as i8 - heights[x] as i8);
     }
 
     diffs
 }
 
 // bits from surface until first hole (0 for no holes)
-fn get_first_hole_depths(board: &Board) -> [i32; 10] {
+fn get_first_hole_depths(board: &Board) -> [i8; 10] {
     let heights = board.heights();
     let mut depths = [0; 10];
 
     for x in 0..10 {
-        depths[x] = board.cols[x].leading_ones() as i32;
-        if heights[x] as i32 == depths[x] {
+        depths[x] = board.cols[x].leading_ones() as i8;
+        if heights[x] as i8 == depths[x] {
             depths[x] = 0;
         }
     }
@@ -34,18 +34,18 @@ fn get_first_hole_depths(board: &Board) -> [i32; 10] {
 }
 
 // locations of all garbage holes
-fn get_garbage_hole_sequence(board: &Board) -> [i32; 20] {
+fn get_garbage_hole_sequence(board: &Board) -> [i8; 20] {
     let mut locations = [-1; 20];
     for y in 0..20 {
-        let xs: Vec<i32> = board.cols.iter().map(|col| {
-            ((col >> y) & 1) as i32
+        let xs: Vec<i8> = board.cols.iter().map(|col| {
+            ((col >> y) & 1) as i8
         }).collect();
         
         let mut sum = 0;
         for x in 1..10 {
             sum += xs[x];
             if xs[x] == 0 {
-                locations[y] = x as i32;
+                locations[y] = x as i8;
             }
         }
         if sum != 9 {
@@ -56,18 +56,18 @@ fn get_garbage_hole_sequence(board: &Board) -> [i32; 20] {
     locations
 }
 
-fn get_distance_to_next_piece(gamestate: &GameState) -> [i32; 7] {
+fn get_distance_to_next_piece(gamestate: &GameState) -> [i8; 7] {
     let queue = gamestate.queue;
     let mut distances = [5;7];
 
     for i in (0..5).rev() {
-        distances[queue[i] as usize] = i as i32;
+        distances[queue[i] as usize] = i as i8;
     }
 
     distances
 }
 
-fn get_count_of_pieces(gamestate: &GameState) -> [i32; 7] {let queue = gamestate.queue;
+fn get_count_of_pieces(gamestate: &GameState) -> [i8; 7] {let queue = gamestate.queue;
     let mut counts = [0;7];
 
     for i in 0..5 {
@@ -78,7 +78,7 @@ fn get_count_of_pieces(gamestate: &GameState) -> [i32; 7] {let queue = gamestate
 }
 
 // more complex, requires lookahead calculation
-fn get_maximum_combo(gamestate: &GameState) -> i32 {
+fn get_maximum_combo(gamestate: &GameState) -> i8 {
     0
 }
 
@@ -87,7 +87,7 @@ fn get_height_variance(board: &Board) -> f32 {
 }
 
 // get one hot codings for certain pieces in queue
-fn get_hold_or_current_piece(gamestate: &GameState) -> [i32; 7] {
+fn get_hold_or_current_piece(gamestate: &GameState) -> [i8; 7] {
     let mut onehot = [0;7];
 
     match gamestate.hold {
@@ -101,7 +101,7 @@ fn get_hold_or_current_piece(gamestate: &GameState) -> [i32; 7] {
 }
 
 // one hot for next piece
-fn get_next_piece(gamestate: &GameState) -> [i32; 7] {
+fn get_next_piece(gamestate: &GameState) -> [i8; 7] {
     let mut onehot = [0;7];
 
     onehot[gamestate.queue[0] as usize] = 1;
@@ -109,7 +109,7 @@ fn get_next_piece(gamestate: &GameState) -> [i32; 7] {
     onehot
 }
 
-fn get_3x3s(board: &Board) -> ([i32; 512], [i32; 5120]) {
+fn get_3x3s(board: &Board) -> ([i8; 512], [i8; 5120]) {
     let mut counts = [0; 512];
     let mut counts_with_x = [0; 5120];
 
@@ -123,7 +123,7 @@ fn get_3x3s(board: &Board) -> ([i32; 512], [i32; 5120]) {
                 (cols[2] & mask[2]) >> y
             ];
             counts[(window[0] | (window[1] << 3) | (window[2] << 6)) as usize] += 1;
-            counts_with_x[((window[0] | (window[1] << 3) | (window[2] << 6)) * (x+1) as u64) as usize] += 1;
+            //counts_with_x[((window[0] | (window[1] << 3) | (window[2] << 6)) * (x+1) as u64) as usize] += 1;
         }
     }
 
@@ -132,15 +132,15 @@ fn get_3x3s(board: &Board) -> ([i32; 512], [i32; 5120]) {
 
 pub struct HachiFeatures {
     pub heights:[u32;10],
-    pub height_differences:[i32;9],
-    pub first_hole_depths:[i32;10],
-    pub garbage_holes:[i32;20],
-    pub piece_distance:[i32;7],
-    pub piece_counts:[i32;7],
-    pub hold_or_current_onehot:[i32;7],
-    pub next_onehot:[i32;7],
-    pub all_3x3s:[i32;512],
-    pub all_3x3s_with_x:[i32;5120]
+    pub height_differences:[i8;9],
+    pub first_hole_depths:[i8;10],
+    pub garbage_holes:[i8;20],
+    pub piece_distance:[i8;7],
+    pub piece_counts:[i8;7],
+    pub hold_or_current_onehot:[i8;7],
+    pub next_onehot:[i8;7],
+    pub all_3x3s:[i8;512],
+    pub all_3x3s_with_x:[i8;5120]
 }
 
 pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
