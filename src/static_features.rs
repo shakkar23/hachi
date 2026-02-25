@@ -7,19 +7,19 @@ use crate::game::{GameState};
 
 pub struct StaticFeatures {
     pub sunbeam_max_height:u32,
-    pub sunbeam_bumpiness:i8,
+    pub sunbeam_bumpiness:i16,
     pub sunbeam_well_x:usize,
-    pub sunbeam_well_depth:i8,
+    pub sunbeam_well_depth:i16,
     pub sunbeam_max_donated_height:u32,
-    pub sunbeam_n_donations:i8,
-    pub sunbeam_t_clears:[i8;4],
-    pub cc_holes:i8,
-    pub cc_coveredness:i8,
-    pub cc_row_transitions:i8
+    pub sunbeam_n_donations:i16,
+    pub sunbeam_t_clears:[i16;4],
+    pub cc_holes:i16,
+    pub cc_coveredness:i16,
+    pub cc_row_transitions:i16
 }
 
 // Return the well's depth and the position of the well
-pub fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i8, usize) {
+pub fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i16, usize) {
     let mut x = 0;
 
     for i in 1..10 {
@@ -40,10 +40,10 @@ pub fn sunbeam_well(board: &Board, heights: &[u32; 10]) -> (i8, usize) {
 
     mask >>= heights[x];
 
-    (mask.count_ones() as i8, x)
+    (mask.count_ones() as i16, x)
 }
 
-pub fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i8 {
+pub fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i16 {
     let mut bumpiness = 0;
     let mut left = 0;
 
@@ -62,11 +62,11 @@ pub fn sunbeam_bumpiness(heights: &[u32; 10], well_x: usize) -> i8 {
         left = i;
     }
 
-    bumpiness as i8
+    bumpiness as i16
 }
 
 // Get the number of holes overground and underground
-pub fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i8, i8) {
+pub fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i16, i16) {
     let min_height = heights[well_x];
 
     let mut holes = 0;
@@ -75,141 +75,15 @@ pub fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i8, 
         holes += heights[i] - min_height - (board.cols[i] >> min_height).count_ones();
     }
 
-    (holes as i8, min_height as i8)
+    (holes as i16, min_height as i16)
 }
 
-// Find the highest tslot
-pub fn sunbeam_tslot(board: &Board, heights: &[u32; 10]) -> Option<Move> {
-    for x in 0..8 {
-        if heights[x] > heights[x + 1] && heights[x] + 1 < heights[x + 2] {
-            if ((board.cols[x] >> (heights[x] - 1)) & 0b111) == 0b001
-                && ((board.cols[x + 1] >> (heights[x] - 1)) & 0b111) == 0b000
-                && ((board.cols[x + 2] >> (heights[x] - 1)) & 0b111) == 0b101
-            {
-                return Some(Move {
-                    x: x as i8 + 1,
-                    y: heights[x] as i8,
-                    r: Rotation::South,
-                    kind: Piece::T,
-                    tspin: None,
-                });
-            }
-        }
-
-        if heights[x + 2] > heights[x + 1] && heights[x + 2] + 1 < heights[x] {
-            if ((board.cols[x] >> (heights[x + 2] - 1)) & 0b111) == 0b101
-                && ((board.cols[x + 1] >> (heights[x + 2] - 1)) & 0b111) == 0b000
-                && ((board.cols[x + 2] >> (heights[x + 2] - 1)) & 0b111) == 0b001
-            {
-                return Some(Move {
-                    x: x as i8 + 1,
-                    y: heights[x + 2] as i8,
-                    r: Rotation::South,
-                    kind: Piece::T,
-                    tspin: None,
-                });
-            }
-        }
-
-        if heights[x + 1] >= 3
-            && heights[x + 1] >= heights[x]
-            && heights[x + 1] + 1 < heights[x + 2]
-        {
-            if ((board.cols[x] >> (heights[x + 1] - 3)) & 0b11000) == 0b00000
-                && ((board.cols[x + 1] >> (heights[x + 1] - 3)) & 0b11110) == 0b00100
-                && ((board.cols[x + 2] >> (heights[x + 1] - 3)) & 0b11111) == 0b10000
-                && (board.has(x as i8 + 1, heights[x + 1] as i8 - 3)
-                    || (!board.has(x as i8 + 1, heights[x + 1] as i8 - 3)
-                        && board.has(x as i8 + 2, heights[x + 1] as i8 - 4)))
-            {
-                return Some(Move {
-                    x: x as i8 + 2,
-                    y: heights[x + 1] as i8 - 2,
-                    r: Rotation::West,
-                    kind: Piece::T,
-                    tspin: None,
-                });
-            }
-        }
-
-        if heights[x + 1] >= 3
-            && heights[x + 1] >= heights[x + 2]
-            && heights[x + 1] + 1 < heights[x]
-        {
-            if ((board.cols[x] >> (heights[x + 1] - 3)) & 0b11111) == 0b10000
-                && ((board.cols[x + 1] >> (heights[x + 1] - 3)) & 0b11110) == 0b00100
-                && ((board.cols[x + 2] >> (heights[x + 1] - 3)) & 0b11000) == 0b00000
-                && (board.has(x as i8 + 1, heights[x + 1] as i8 - 3)
-                    || (!board.has(x as i8 + 1, heights[x + 1] as i8 - 3)
-                        && board.has(x as i8, heights[x + 1] as i8 - 4)))
-            {
-                return Some(Move {
-                    x: x as i8,
-                    y: heights[x + 1] as i8 - 2,
-                    r: Rotation::East,
-                    kind: Piece::T,
-                    tspin: None,
-                });
-            }
-        }
-    }
-
-    None
+pub fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i16; 4], i16) {
+    ([0i16;4], 0i16)
 }
 
-pub fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i8; 4], i8) {
-    let mut tslots = [0; 4];
-    let mut donations = 0;
-
-    for _ in 0..depth {
-        if let Some(tslot) = sunbeam_tslot(board, heights) {
-            let mut clone = board.clone();
-
-            clone.place(&tslot);
-
-            let clear = clone.clear_lines();
-
-            tslots[clear as usize] += 1;
-
-            if clear >= 2 {
-                *board = clone;
-                *heights = board.heights();
-
-                donations += 1;
-            } else {
-                break;
-            }
-        }
-    }
-
-    (tslots, donations)
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_donations() {
-        let mut board = Board::new();
-        board.cols[0] = 0b111;
-        board.cols[1] = 0b101;
-        board.cols[2] = 0b000;
-        board.cols[3] = 0b001;
-        board.cols[4] = 0b111;
-        board.cols[5] = 0b111;
-        board.cols[6] = 0b111;
-        board.cols[7] = 0b111;
-        board.cols[8] = 0b111;
-        board.cols[9] = 0b111;
-        let mut heights = board.heights();
-        assert_eq!(sunbeam_donations(&mut board, &mut heights, 2).0 ,[0,0,1,0]);
-    }
-}
-
-pub fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i8 {
-    let mut holes = 0i8;
+pub fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i16 {
+    let mut holes = 0i16;
 
     for x in 0..10 {
         let h = heights[x];
@@ -218,13 +92,13 @@ pub fn cc_count_holes(board: &Board, heights: &[u32; 10]) -> i8 {
         }
         let underneath = (1u64 << h) - 1;
         let empty_bits = (!board.cols[x]) & underneath;
-        holes += empty_bits.count_ones() as i8;
+        holes += empty_bits.count_ones() as i16;
     }
 
     holes
 }
 
-pub fn cc_coveredness(board: &Board) -> i8 {
+pub fn cc_coveredness(board: &Board) -> i16 {
     let mut coveredness = 0;
     for &c in &board.cols {
         let height = 64 - c.leading_zeros();
@@ -232,7 +106,7 @@ pub fn cc_coveredness(board: &Board) -> i8 {
         let mut holes = !c & underneath;
         while holes != 0 {
             let y = holes.trailing_zeros();
-            coveredness += (height - y) as i8;
+            coveredness += (height - y) as i16;
             holes &= !(1 << y);
         }
     }
@@ -240,7 +114,7 @@ pub fn cc_coveredness(board: &Board) -> i8 {
     coveredness
 }
 
-pub fn cc_row_transitions(board: &Board) -> i8 {
+pub fn cc_row_transitions(board: &Board) -> i16 {
     let mut row_transitions = 0;
     row_transitions += (!0 ^ board.cols[0]).count_ones();
     row_transitions += (!0 ^ board.cols[9]).count_ones();
@@ -248,7 +122,7 @@ pub fn cc_row_transitions(board: &Board) -> i8 {
         row_transitions += (cs[0] ^ cs[1]).count_ones();
     }
 
-    row_transitions as i8
+    row_transitions as i16
 }
 
 pub fn get_static_features(game:&GameState) -> StaticFeatures {

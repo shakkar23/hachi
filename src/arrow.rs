@@ -1,5 +1,5 @@
 use duckdb::arrow::array::{
-    ArrayBuilder, ArrayRef, BooleanBuilder, Float32Builder, UInt16Builder, Int8Builder,
+    ArrayBuilder, ArrayRef, BooleanBuilder, Float32Builder, UInt16Builder, Int16Builder,
 };
 use duckdb::arrow::datatypes::{DataType, Field, Schema};
 use duckdb::arrow::record_batch::RecordBatch;
@@ -18,12 +18,12 @@ pub fn rows_to_record_batch(rows: &[Row]) -> Result<RecordBatch, ArrowError> {
 
     let n_feat = Features::count;
 
-    let mut feat0_builders: Vec<Int8Builder> = (0..n_feat)
-        .map(|_| Int8Builder::with_capacity(n_rows))
+    let mut feat0_builders: Vec<Int16Builder> = (0..n_feat)
+        .map(|_| Int16Builder::with_capacity(n_rows))
         .collect();
 
-    let mut feat1_builders: Vec<Int8Builder> = (0..n_feat)
-        .map(|_| Int8Builder::with_capacity(n_rows))
+    let mut feat1_builders: Vec<Int16Builder> = (0..n_feat)
+        .map(|_| Int16Builder::with_capacity(n_rows))
         .collect();
 
     for row in rows {
@@ -60,11 +60,11 @@ pub fn rows_to_record_batch(rows: &[Row]) -> Result<RecordBatch, ArrowError> {
     ];
 
     for i in 0..n_feat {
-        fields.push(Field::new(format!("f0_{i}"), DataType::Int8, false));
+        fields.push(Field::new(format!("f0_{i}"), DataType::Int16, false));
     }
 
     for i in 0..n_feat {
-        fields.push(Field::new(format!("f1_{i}"), DataType::Int8, false));
+        fields.push(Field::new(format!("f1_{i}"), DataType::Int16, false));
     }
 
     let schema = Arc::new(Schema::new(fields));

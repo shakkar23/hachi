@@ -25,7 +25,7 @@ xgb_model = xgb.XGBRegressor(
     reg_lambda=1,
     reg_alpha=0.1,
     random_state=42,
-    n_jobs=-1,
+    n_jobs=2,
     eval_metric=['rmse', 'mae']
 )
 

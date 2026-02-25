@@ -4,27 +4,28 @@ use crate::static_features;
 
 pub struct Features {
     pub heights:[u32;10],
-    pub height_differences:[i8;9],
-    pub first_hole_depths:[i8;10],
-    pub garbage_holes:[i8;20],
-    pub piece_distance:[i8;7],
-    pub piece_counts:[i8;7],
-    pub hold_or_current_onehot:[i8;7],
-    pub next_onehot:[i8;7],
-    pub all_3x3s:[i8;512],
-    pub all_3x3s_with_x:[i8;5120],
+    pub height_differences:[i16;9],
+    pub first_hole_depths:[i16;10],
+    pub garbage_holes:[i16;20],
+    pub piece_distance:[i16;7],
+    pub piece_counts:[i16;7],
+    pub hold_or_current_onehot:[i16;7],
+    pub next_onehot:[i16;7],
+    pub all_3x3s:[i16;512],
+    pub all_3x3s_with_x:[i16;512],
+    pub all_3x3s_with_y:[i16;512],
 
     pub sunbeam_max_height:u32,
-    pub sunbeam_bumpiness:i8,
+    pub sunbeam_bumpiness:i16,
     pub sunbeam_well_x:usize,
-    pub sunbeam_well_depth:i8,
+    pub sunbeam_well_depth:i16,
     pub sunbeam_max_donated_height:u32,
-    pub sunbeam_n_donations:i8,
-    pub sunbeam_t_clears:[i8;4],
+    pub sunbeam_n_donations:i16,
+    pub sunbeam_t_clears:[i16;4],
 
-    pub cc_holes:i8,
-    pub cc_coveredness:i8,
-    pub cc_row_transitions:i8
+    pub cc_holes:i16,
+    pub cc_coveredness:i16,
+    pub cc_row_transitions:i16
 }
 
 pub struct Row {
@@ -51,6 +52,7 @@ pub fn extract_features(game: &game::GameState) -> Features {
         next_onehot: hf.next_onehot,
         all_3x3s: hf.all_3x3s,
         all_3x3s_with_x: hf.all_3x3s_with_x,
+        all_3x3s_with_y: hf.all_3x3s_with_y,
 
         sunbeam_max_height: sf.sunbeam_max_height,
         sunbeam_bumpiness: sf.sunbeam_bumpiness,
@@ -78,7 +80,7 @@ impl Features {
     fn sql_columns_with_options(prefix: &str, include_types: bool) -> String {
         let mut columns = Vec::new();
         
-        let type_suffix = if include_types { " TINYINT NOT NULL" } else { "" };
+        let type_suffix = if include_types { " SMALLINT NOT NULL" } else { "" };
         
         // heights array
         for i in 0..10 {
@@ -125,10 +127,15 @@ impl Features {
         }
         
         // all_3x3s_with_x array
-        for i in 0..5120 {
+        for i in 0..512 {
             columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_x", i, type_suffix));
         }
-        
+
+        // all_3x3s_with_y array
+        for i in 0..512 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_y", i, type_suffix));
+        }
+
         // sunbeam scalar fields
         columns.push(format!("{}_{}{}", prefix, "sunbeam_max_height", type_suffix));
         columns.push(format!("{}_{}{}", prefix, "sunbeam_bumpiness", type_suffix));
@@ -160,7 +167,8 @@ impl Features {
         7 +  // hold or current
         7 +  // next
         512 +  // 3x3s
-        5120 + // 3x3s with x
+        512 + // 3x3s with x
+        512 + // 3x3s with y
         6 +  // sunbeam scalars
         4 +  // sunbeam_t_clears
         3   // cc scalars
@@ -173,77 +181,82 @@ impl Features {
 }
 
 impl Features {
-    pub fn values(&self) -> Vec<i8> {
+    pub fn values(&self) -> Vec<i16> {
         let mut vals = Vec::new();
         
         // heights array
         for &h in &self.heights {
-            vals.push(h as i8);
+            vals.push(h as i16);
         }
         
         // height_differences array
         for &hd in &self.height_differences {
-            vals.push(hd as i8);
+            vals.push(hd as i16);
         }
         
         // first_hole_depths array
         for &fhd in &self.first_hole_depths {
-            vals.push(fhd as i8);
+            vals.push(fhd as i16);
         }
         
         // garbage_holes array
         for &gh in &self.garbage_holes {
-            vals.push(gh as i8);
+            vals.push(gh as i16);
         }
 
         // piece_distance array
         for &pd in &self.piece_distance {
-            vals.push(pd as i8);
+            vals.push(pd as i16);
         }
         
         // piece_counts array
         for &pc in &self.piece_counts {
-            vals.push(pc as i8);
+            vals.push(pc as i16);
         }
         
         // hold_or_current_onehot array
         for &hoc in &self.hold_or_current_onehot {
-            vals.push(hoc as i8);
+            vals.push(hoc as i16);
         }
         
         // next_onehot array
         for &no in &self.next_onehot {
-            vals.push(no as i8);
+            vals.push(no as i16);
         }
 
         // 3x3s
         for &no in &self.all_3x3s {
-            vals.push(no as i8);
+            vals.push(no as i16);
         }
         
         // 3x3s with x
         for &no in &self.all_3x3s_with_x {
-            vals.push(no as i8);
+            vals.push(no as i16);
         }
         
         
+        // 3x3s with y
+        for &no in &self.all_3x3s_with_y {
+            vals.push(no as i16);
+        }
+        
         // sunbeam scalar fields
-        vals.push(self.sunbeam_max_height as i8);
-        vals.push(self.sunbeam_bumpiness as i8);
-        vals.push(self.sunbeam_well_x as i8);
-        vals.push(self.sunbeam_well_depth as i8);
-        vals.push(self.sunbeam_max_donated_height as i8);
-        vals.push(self.sunbeam_n_donations as i8);
+        vals.push(self.sunbeam_max_height as i16);
+        vals.push(self.sunbeam_bumpiness as i16);
+        vals.push(self.sunbeam_well_x as i16);
+        vals.push(self.sunbeam_well_depth as i16);
+        vals.push(self.sunbeam_max_donated_height as i16);
+        vals.push(self.sunbeam_n_donations as i16);
         
         // sunbeam_t_clears array
         for &tc in &self.sunbeam_t_clears {
-            vals.push(tc as i8);
+            vals.push(tc as i16);
         }
         
         // cc scalar fields
-        vals.push(self.cc_holes as i8);
-        vals.push(self.cc_coveredness as i8);
-        vals.push(self.cc_row_transitions as i8);
+        vals.push(self.cc_holes as i16);
+        vals.push(self.cc_coveredness as i16);
+        vals.push(self.cc_row_transitions as i16);
         
         vals
     }
