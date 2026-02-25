@@ -15,8 +15,7 @@ def print_3x3_patterns(numbers):
         rank += 1
         for row in grid:
             print(''.join(['▓' if cell else ' ' for cell in row]))
-
-# Your numbersunique_3x3_patterns 
+ 
 numbers = [
     511, 0, 63, 455, 504, 507, 255, 73, 219, 505, 447, 127, 510, 479, 508, 463, 
     487, 503, 319, 64, 1, 9, 8, 216, 11, 472, 509, 200, 223, 72, 31, 91, 475, 

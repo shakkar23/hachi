@@ -7,7 +7,7 @@ DATABASE_PATH = "./training.duckdb"
 
 conn = duckdb.connect(DATABASE_PATH)
 
-sql_query = "SELECT * FROM training_data"
+sql_query = "SELECT * FROM training_data WHERE ABS(ground_truth) > 0.1"
 
 t = time.perf_counter()
 
@@ -17,8 +17,11 @@ print(f"Loaded training data in {time.perf_counter() - t:.4f}s")
 
 conn.close()
 
+state = df['state']
+
 df = df.drop(columns=[
     "game_id",
+    "state",
     "move_index",
 ])
 

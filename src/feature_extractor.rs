@@ -1,6 +1,7 @@
 use crate::hachi;
 use crate::game;
 use crate::static_features;
+use crate::whitelist;
 
 pub struct Features {
     pub heights:[u32;10],
@@ -68,6 +69,9 @@ pub fn extract_features(game: &game::GameState) -> Features {
     }
 }
 
+const use_3x3s:bool = true;
+const use_positional_3x3s:bool = true;
+
 impl Features {
     pub fn sql_columns(prefix: &str) -> String {
         Self::sql_columns_with_options(prefix, false)
@@ -121,19 +125,23 @@ impl Features {
             columns.push(format!("{}_{}{}{}", prefix, "next_onehot", i, type_suffix));
         }
         
-        // all_3x3s array
-        for i in 0..512 {
-            columns.push(format!("{}_{}{}{}", prefix, "all_3x3s", i, type_suffix));
+        if use_3x3s {
+            // all_3x3s array
+            for i in whitelist::top_100_3x3s.iter() {
+                columns.push(format!("{}_{}{}{}", prefix, "all_3x3s", i, type_suffix));
+            }
         }
         
-        // all_3x3s_with_x array
-        for i in 0..512 {
-            columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_x", i, type_suffix));
-        }
+        if use_positional_3x3s {
+            // all_3x3s_with_x array
+            for i in whitelist::top_100_3x3s_with_x.iter() {
+                columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_x", i, type_suffix));
+            }
 
-        // all_3x3s_with_y array
-        for i in 0..512 {
-            columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_y", i, type_suffix));
+            // all_3x3s_with_y array
+            for i in whitelist::top_100_3x3s_with_y.iter() {
+                columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_y", i, type_suffix));
+            }
         }
 
         // sunbeam scalar fields
@@ -166,9 +174,9 @@ impl Features {
         7 +  // piece counts
         7 +  // hold or current
         7 +  // next
-        512 +  // 3x3s
-        512 + // 3x3s with x
-        512 + // 3x3s with y
+        if use_3x3s {whitelist::top_100_3x3s.len()} else {0} +  // 3x3s
+        if use_positional_3x3s {whitelist::top_100_3x3s_with_x.len()} else {0} + // 3x3s with x
+        if use_positional_3x3s {whitelist::top_100_3x3s_with_y.len()} else {0} + // 3x3s with y
         6 +  // sunbeam scalars
         4 +  // sunbeam_t_clears
         3   // cc scalars
@@ -224,20 +232,24 @@ impl Features {
             vals.push(no as i16);
         }
 
-        // 3x3s
-        for &no in &self.all_3x3s {
-            vals.push(no as i16);
+        if use_3x3s {
+            // 3x3s
+            for i in whitelist::top_100_3x3s.iter() {
+                vals.push(self.all_3x3s[*i] as i16);
+            }
         }
-        
-        // 3x3s with x
-        for &no in &self.all_3x3s_with_x {
-            vals.push(no as i16);
-        }
-        
-        
-        // 3x3s with y
-        for &no in &self.all_3x3s_with_y {
-            vals.push(no as i16);
+
+        if use_positional_3x3s {
+
+            // 3x3s with x
+            for i in whitelist::top_100_3x3s_with_x.iter() {
+                vals.push(self.all_3x3s_with_x[*i] as i16);
+            }
+            
+            // 3x3s with y
+            for i in whitelist::top_100_3x3s_with_y.iter() {
+                vals.push(self.all_3x3s_with_y[*i] as i16);
+            }
         }
         
         // sunbeam scalar fields

@@ -118,11 +118,11 @@ fn get_3x3s(board: &Board) -> ([i16; 512], [i16; 512], [i16; 512]) {
     let mut counts_with_y = [0; 512];
 
     // max encoding sizes
-    const x_cutoff:i16 = i16::MAX.ilog(7) as i16;
-    const y_cutoff:i16 = i16::MAX.ilog(10) as i16;
+    const x_cutoff:i16 = i16::MAX.ilog(8) as i16; // 5
+    const y_cutoff:i16 = i16::MAX.ilog(10) as i16; // 4
 
     for y in (0..height).rev() {
-        for x in 0..7 {
+        for x in 0..8 {
             let mask = [0b111 << y, 0b111 << y, 0b111 << y];
             let cols:&[u64] = &board.cols[x..=x+2];
             let window = [
@@ -130,25 +130,15 @@ fn get_3x3s(board: &Board) -> ([i16; 512], [i16; 512], [i16; 512]) {
                 (cols[1] & mask[1]) >> y,
                 (cols[2] & mask[2]) >> y
             ];
+            // ID of 3x3 filter that matches exactly
             let idx = (window[0] | (window[1] << 3) | (window[2] << 6)) as usize;
 
+            // increment counter for how often this pattern has appeared
             counts[idx] += 1;
 
-            if counts[idx] <= x_cutoff {
-                counts_with_x[idx] *= 7;
-                counts_with_x[idx] += x as i16;
-            }
+            counts_with_x[idx] += x as i16;
 
-            let depth = height - y;
-
-            if depth > 10 {
-                continue;
-            }
-
-            if counts[idx] <= y_cutoff {
-                counts_with_y[idx] *= 10;
-                counts_with_y[idx] += depth as i16;
-            }
+            counts_with_y[idx] += y as i16;
         }
     }
     (counts, counts_with_x, counts_with_y)

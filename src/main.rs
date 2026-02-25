@@ -2,17 +2,19 @@ use tetris::{board::Board, piece::Piece, piece::Rotation};
 use std::{env, fs::exists};
 use rayon::prelude::*;
 use std::time::Instant;
+use std::panic;
 
 use duckdb::arrow::record_batch::RecordBatch;
 
 use rusqlite::{Connection, Result};
-use duckdb::{Connection as DuckConnection, Result as DuckResult};
+use duckdb::{Connection as DuckConnection, Result as DuckResult, Error as DuckError};
 
 mod hachi;
 mod static_features;
 mod game;
 mod feature_extractor;
 mod arrow;
+mod whitelist;
 
 use crate::feature_extractor::{Features, Row};
 
@@ -206,6 +208,7 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> DuckResult<()> {
             "CREATE TABLE IF NOT EXISTS training_data (
                 game_id       INTEGER NOT NULL,
                 move_index    INTEGER NOT NULL,
+                state         SMALLINT NOT NULL,
                 ground_truth  REAL NOT NULL,
                 {},
                 {},
@@ -237,7 +240,7 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> DuckResult<()> {
         if row.ground_truth != 0f32 {
             loss = row.ground_truth;
         } else {
-            row.ground_truth = (45f32 / 60f32) * loss;
+            row.ground_truth = (50f32 / 60f32) * loss;
             loss = row.ground_truth;
         }
     }
