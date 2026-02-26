@@ -6,6 +6,10 @@ build_rel/
 database.db
 training.duckdb
 train/__pycache__/
+catboost_info
+15.db
+15.duckdb
+out.txt
 
 
 # Added by cargo

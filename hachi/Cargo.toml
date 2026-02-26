@@ -1,0 +1,12 @@
+[package]
+name = "hachi"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+enumset = "1.1.10"
+strum = { version = "0.27.2", features = ["derive"] }
+tetris = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+rand = "0.9.2"
