@@ -1,8 +1,9 @@
 from data import state, df
-from model import xgb_model
+from model import xgb_model, mini_model, big_lgb_model
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
 
 iterations = 5
 lmbd = 0.5
@@ -47,19 +48,19 @@ def create_tf_df(df_in, model_in):
         
         if reward != 0:
             # reset at terminal state
-            target = reward * (1-lmbd)
+            target = reward
             lambda_n = lmbd
         else:
             # TD(λ) forwards view
             prediction = td_df.iloc[i]['prediction']
-            target = (1 - lmbd) * prediction + lmbd * target
+            target = prediction + lmbd * target
 
             lambda_n *= lmbd
         
         targets[i] = target
 
         # correct for short horizon
-        targets[i] *= 1/(1-lambda_n)
+        targets[i] *= (1-lmbd)/(1-lambda_n)
     
     td_df['ground_truth'] = targets
     
@@ -79,36 +80,39 @@ def state_to_reward(state_int):
     return 0.0
 
 
-def train():
-    global xgb_model
-    
-    # Assuming df contains features + 'state' column
+def train(base_model, td_model, save=True):
     current_df = df.copy()
     
     # Load initial model
-    xgb_model.load_model("models/model.ubj")
+    base_model.load_model("models/td_model.ubj")
+
+    # Initial targets
+    current_df['prediction'] = base_model.predict(current_df.drop(columns=['state', 'prediction'], errors='ignore'))
+    X, y = create_tf_df(current_df, base_model)
     
     for i in range(iterations):
-        # 1. Generate current predictions
-        current_df['prediction'] = xgb_model.predict(current_df.drop(columns=['state', 'prediction'], errors='ignore'))
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+
+        td_model.fit(X_train, y_train)
         
-        # 2. Compute TD(λ) targets
-        X, y = create_tf_df(current_df, xgb_model)
-        
-        # 3. Refit model
-        xgb_model.fit(X, y)
-        
-        # Optional: evaluate on current targets
-        y_pred = xgb_model.predict(X)
-        mse = mean_squared_error(y, y_pred)
-        r2 = r2_score(y, y_pred)
+        y_pred = td_model.predict(X_test)
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
         
         print(f"Iteration {i+1}/{iterations} done")
         print(f"Mean Squared Error: {mse:.4f}")
         print(f"R² Score:       {r2:.4f}\n")
+        
+        # Boostrapped targets
+
+        current_df['prediction'] = td_model.predict(current_df.drop(columns=['state', 'prediction'], errors='ignore'))
+        X, y = create_tf_df(current_df, td_model)
     
-    xgb_model.save_model("models/td_model.ubj")
-    print("Training completed. Final model saved as td_model.ubj")
+    if not save:
+        return
+
+    td_model.save_model("models/big_td_model.ubj")
+    print("Training completed. Final model saved as big_td_model.ubj")
 
 if __name__ == "__main__":
-    train()
+    train(xgb_model, big_lgb_model, save=False)
