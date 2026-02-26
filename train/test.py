@@ -8,7 +8,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 # Load saved model
 model = xgb.XGBRegressor()
-model.load_model("./model.ubj")
+model.load_model("models/model.ubj")
 
 print("Model loaded • using last 100 rows of X_test from data module\n")
 

@@ -86,7 +86,7 @@ def train():
     current_df = df.copy()
     
     # Load initial model
-    xgb_model.load_model("./model.ubj")
+    xgb_model.load_model("models/model.ubj")
     
     for i in range(iterations):
         # 1. Generate current predictions
@@ -107,7 +107,7 @@ def train():
         print(f"Mean Squared Error: {mse:.4f}")
         print(f"R² Score:       {r2:.4f}\n")
     
-    xgb_model.save_model("./td_model.ubj")
+    xgb_model.save_model("models/td_model.ubj")
     print("Training completed. Final model saved as td_model.ubj")
 
 if __name__ == "__main__":

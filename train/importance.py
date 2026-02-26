@@ -88,4 +88,7 @@ def load_xgboost_ubj_and_save_importances(ubj_file_path, output_file_path, impor
         print(f"Error loading model or saving importances: {e}")
         return None
 
-load_xgboost_ubj_and_save_importances("./model.ubj", "importances.txt")
+import sys
+
+if __name__ == "__main__":
+    load_xgboost_ubj_and_save_importances(sys.argv[1], "importances.txt")

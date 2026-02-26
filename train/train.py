@@ -30,4 +30,4 @@ print(f"Mean Squared Error: {mse:.4f}")
 print(f"MSE Legend. 0.01 : Good. 0.05 : Fine. 0.1 : Weak. 0.25 : Worst")
 print(f"R² Score: {r2:.4f}")
 
-xgb_model.save_model("./model.ubj") 
+xgb_model.save_model("models/model.ubj") 
