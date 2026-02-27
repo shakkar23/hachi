@@ -8,8 +8,8 @@ import numba
 from numba import jit, float64, int64
 import time
 
-iterations = 10
-lmbd = 0.75
+iterations = 50
+lmbd = 0.5
 
 @jit(nopython=True)
 def compute_targets_numba(predictions, states, lmbd):

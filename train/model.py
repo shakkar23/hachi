@@ -1,13 +1,8 @@
 import xgboost as xgb 
 import lightgbm as lgb
 from catboost import CatBoostRegressor
-import torch
 
 device = "cuda"
-
-if not torch.cuda.is_available():
-    device = "cpu"
-
 
 xgb_model = xgb.XGBRegressor(
     max_depth=5,
