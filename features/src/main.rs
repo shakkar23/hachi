@@ -111,6 +111,7 @@ fn extract_data(db_path:String) -> Vec<Datum> {
         p1_move_piece_x,
         p1_move_piece_y,
         p1_meter,
+        p1_combo,
         p1_attack,
         p1_damage_received,
         p1_spun,
@@ -127,6 +128,7 @@ fn extract_data(db_path:String) -> Vec<Datum> {
         p2_move_piece_x,
         p2_move_piece_y,
         p2_meter,
+        p2_combo,
         p2_attack,
         p2_damage_received,
         p2_spun,
@@ -138,7 +140,9 @@ fn extract_data(db_path:String) -> Vec<Datum> {
         p2_hold,
         state,
         game_id,
-        move_index
+        move_index,
+        p1_b2b,
+        p2_b2b
         FROM Data ORDER BY game_id ASC, move_index ASC").unwrap();
     let data_iter = stmt.query_map([], |row| {
         Ok(Datum{
@@ -153,44 +157,48 @@ fn extract_data(db_path:String) -> Vec<Datum> {
                     y:row.get(5)?
                 },
                 meter:row.get(6)?,
-                attack:row.get(7)?,
-                damage_received:row.get(8)?,
-                spun:row.get::<_, i32>(9)? == 1,
+                combo:row.get(7)?,
+                b2b:row.get(37)?,
+                attack:row.get(8)?,
+                damage_received:row.get(9)?,
+                spun:row.get::<_, i32>(10)? == 1,
                 queue:[
-                    to_piece(&row.get::<_, String>(10)?).unwrap(),
                     to_piece(&row.get::<_, String>(11)?).unwrap(),
                     to_piece(&row.get::<_, String>(12)?).unwrap(),
                     to_piece(&row.get::<_, String>(13)?).unwrap(),
-                    to_piece(&row.get::<_, String>(14)?).unwrap()
+                    to_piece(&row.get::<_, String>(14)?).unwrap(),
+                    to_piece(&row.get::<_, String>(15)?).unwrap(),
                 ],
-                hold:to_piece(&row.get::<_, String>(15)?).ok()
+                hold:to_piece(&row.get::<_, String>(16)?).ok()
             },
             p2:GameState {
-                board: to_board(row.get(16)?),
-                current_piece: to_piece(&row.get::<_, String>(17)?).unwrap(),
+                board: to_board(row.get(17)?),
+                current_piece: to_piece(&row.get::<_, String>(18)?).unwrap(),
                 
                 placement:Move{
-                    move_type:to_piece(&row.get::<_, String>(18)?).ok(),
-                    rotation: to_rotation(row.get(19)?).unwrap(),
-                    x:row.get(20)?,
-                    y:row.get(21)?
+                    move_type:to_piece(&row.get::<_, String>(19)?).ok(),
+                    rotation: to_rotation(row.get(20)?).unwrap(),
+                    x:row.get(21)?,
+                    y:row.get(22)?
                 },
-                meter:row.get(22)?,
-                attack:row.get(23)?,
-                damage_received:row.get(24)?,
-                spun:row.get::<_, i32>(25)? == 1,
+                meter:row.get(23)?,
+                combo:row.get(24)?,
+                b2b:row.get(38)?,
+                attack:row.get(25)?,
+                damage_received:row.get(26)?,
+                spun:row.get::<_, i32>(27)? == 1,
                 queue:[
-                    to_piece(&row.get::<_, String>(26)?).unwrap(),
-                    to_piece(&row.get::<_, String>(27)?).unwrap(),
                     to_piece(&row.get::<_, String>(28)?).unwrap(),
                     to_piece(&row.get::<_, String>(29)?).unwrap(),
-                    to_piece(&row.get::<_, String>(30)?).unwrap()
+                    to_piece(&row.get::<_, String>(30)?).unwrap(),
+                    to_piece(&row.get::<_, String>(31)?).unwrap(),
+                    to_piece(&row.get::<_, String>(32)?).unwrap(),
                 ],
-                hold:to_piece(&row.get::<_, String>(31)?).ok()
+                hold:to_piece(&row.get::<_, String>(33)?).ok()
             },
-            state:to_state(&row.get::<_, String>(32)?).unwrap(),
-            game_id: row.get(33)?,
-            move_index: row.get(34)?
+            state:to_state(&row.get::<_, String>(34)?).unwrap(),
+            game_id: row.get(35)?,
+            move_index: row.get(36)?
         })
     }).unwrap();
     

@@ -156,7 +156,9 @@ pub struct HachiFeatures {
     pub all_3x3s:[i16;512],
     pub all_3x3s_with_x:[i16;512],
     pub all_3x3s_with_y:[i16;512],
-    pub meter: i16
+    pub meter: i16,
+    pub combo: i16,
+    pub b2b: i16,
 }
 
 pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
@@ -174,6 +176,8 @@ pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
         all_3x3s: all_3x3s,
         all_3x3s_with_x: all_3x3s_with_x,
         all_3x3s_with_y: all_3x3s_with_y,
-        gamestate.meter as i16
+        meter: gamestate.meter as i16,
+        combo: gamestate.combo as i16,
+        b2b: gamestate.b2b as i16,
     }
 }
