@@ -155,7 +155,8 @@ pub struct HachiFeatures {
     pub next_onehot:[i16;7],
     pub all_3x3s:[i16;512],
     pub all_3x3s_with_x:[i16;512],
-    pub all_3x3s_with_y:[i16;512]
+    pub all_3x3s_with_y:[i16;512],
+    pub meter: i16
 }
 
 pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
@@ -172,6 +173,7 @@ pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
         next_onehot: get_next_piece(&gamestate),
         all_3x3s: all_3x3s,
         all_3x3s_with_x: all_3x3s_with_x,
-        all_3x3s_with_y: all_3x3s_with_y
+        all_3x3s_with_y: all_3x3s_with_y,
+        gamestate.meter as i16
     }
 }

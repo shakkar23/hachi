@@ -15,6 +15,7 @@ pub struct Features {
     pub all_3x3s:[i16;512],
     pub all_3x3s_with_x:[i16;512],
     pub all_3x3s_with_y:[i16;512],
+    pub meter: i16,
 
     pub sunbeam_max_height:u32,
     pub sunbeam_bumpiness:i16,
@@ -54,6 +55,7 @@ pub fn extract_features(game: &game::GameState) -> Features {
         all_3x3s: hf.all_3x3s,
         all_3x3s_with_x: hf.all_3x3s_with_x,
         all_3x3s_with_y: hf.all_3x3s_with_y,
+        meter: hf.meter,
 
         sunbeam_max_height: sf.sunbeam_max_height,
         sunbeam_bumpiness: sf.sunbeam_bumpiness,
@@ -144,6 +146,9 @@ impl Features {
             }
         }
 
+        // hachi scalar
+        columns.push(format!("{}_{}{}", prefix, "meter", type_suffix));
+
         // sunbeam scalar fields
         columns.push(format!("{}_{}{}", prefix, "sunbeam_max_height", type_suffix));
         columns.push(format!("{}_{}{}", prefix, "sunbeam_bumpiness", type_suffix));
@@ -177,6 +182,7 @@ impl Features {
         if use_3x3s {whitelist::top_100_3x3s.len()} else {0} +  // 3x3s
         if use_positional_3x3s {whitelist::top_100_3x3s_with_x.len()} else {0} + // 3x3s with x
         if use_positional_3x3s {whitelist::top_100_3x3s_with_y.len()} else {0} + // 3x3s with y
+        1 + // hachi scalar
         6 +  // sunbeam scalars
         4 +  // sunbeam_t_clears
         3   // cc scalars
@@ -251,6 +257,8 @@ impl Features {
                 vals.push(self.all_3x3s_with_y[*i] as i16);
             }
         }
+
+        vals.push(self.meter as i16);
         
         // sunbeam scalar fields
         vals.push(self.sunbeam_max_height as i16);
