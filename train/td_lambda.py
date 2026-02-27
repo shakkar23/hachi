@@ -1,22 +1,54 @@
 from data import state, df
-from model import xgb_model, mini_model, big_lgb_model
+from model import xgb_model, mini_model, big_model
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
+import numba
+from numba import jit, float64, int64
+import time
 
-iterations = 5
-lmbd = 0.5
+iterations = 10
+lmbd = 0.75
+
+@jit(nopython=True)
+def compute_targets_numba(predictions, states, lmbd):
+    """
+    Compute TD(λ) targets using numba
+    
+    Args:
+        predictions: array of predictions from the model
+        states: array of state indices
+        state_to_reward_map: array mapping state indices to rewards
+        lmbd: lambda parameter
+    """
+    n = len(predictions)
+    targets = np.zeros(n)
+    
+    target = 0.0
+    lambda_n = lmbd
+    
+    for i in range(n-1, -1, -1):
+        row_state = states[i]
+        reward = state_to_reward(states[i])
+
+        if reward != 0.0:  # terminal state
+            target = reward
+            lambda_n = lmbd
+        else:
+            prediction = predictions[i]
+            target = prediction + lmbd * target
+            lambda_n *= lmbd
+        
+        targets[i] = target * (1.0 - lmbd) / (1.0 - lambda_n)
+    
+    return targets
 
 def create_tf_df(df_in, model_in):
     """
     Create temporal difference targets using TD(λ) for short trajectories
     """
     td_df = df_in.copy()
-    
-    # Get model predictions for current state of the data
-    if 'prediction' not in td_df.columns:
-        td_df['prediction'] = model_in.predict(td_df.drop(columns=['state'], errors='ignore'))
     
     # napkin derivation of td-lambda for reference:
     # using plain power series, our target would be
@@ -29,39 +61,14 @@ def create_tf_df(df_in, model_in):
     # finite geometric series is (1-lambda^t)/(1-lambda)
     # so additionally divide by (1-lambda^t) to correct for smallness of t.
 
-    # targets column as numpy array
-    targets = np.zeros(len(td_df))
-
-    target = 0.0
-    lambda_accum = 1.0          # λ^n term
-    lambda_n = lmbd             # current λ^n value
+    # Extract arrays for numba
+    predictions = td_df['prediction'].values.astype(np.float64)
+    states = state.values.astype(np.int64)
     
-    # iterate df backwards
-    for i in reversed(range(0, len(td_df))):
-        # calculate reward from row.state
-        # if reward is 1 or -1, set target = reward * (1-lmbd), set lmbd_n = lmbd
-        # else do target = [target * lmbd + prediction * (1-lmbd)] * (1-lmbd_n * lmbd) / (1-lmbd_n) and lmbd_n *= lmbd
-        # finally set 'ground_truth' column of targets to target
-
-        row_state = int(state.iloc[i])
-        reward = state_to_reward(row_state)
-        
-        if reward != 0:
-            # reset at terminal state
-            target = reward
-            lambda_n = lmbd
-        else:
-            # TD(λ) forwards view
-            prediction = td_df.iloc[i]['prediction']
-            target = prediction + lmbd * target
-
-            lambda_n *= lmbd
-        
-        targets[i] = target
-
-        # correct for short horizon
-        targets[i] *= (1-lmbd)/(1-lambda_n)
+    # Compute targets with numba
+    targets = compute_targets_numba(predictions, states, lmbd)
     
+    # Assign back to dataframe
     td_df['ground_truth'] = targets
     
     # remove non-feature columns
@@ -72,6 +79,7 @@ def create_tf_df(df_in, model_in):
     return features_df, td_df['ground_truth']
 
 
+@jit(nopython=True)
 def state_to_reward(state_int):
     if state_int == 1:
         return 1.0
@@ -93,7 +101,11 @@ def train(base_model, td_model, save=True):
     for i in range(iterations):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
 
+        t = time.perf_counter()
+
         td_model.fit(X_train, y_train)
+
+        print(f"Fitting done in {time.perf_counter() - t:.4f} seconds")
         
         y_pred = td_model.predict(X_test)
         mse = mean_squared_error(y_test, y_pred)
@@ -104,7 +116,6 @@ def train(base_model, td_model, save=True):
         print(f"R² Score:       {r2:.4f}\n")
         
         # Boostrapped targets
-
         current_df['prediction'] = td_model.predict(current_df.drop(columns=['state', 'prediction'], errors='ignore'))
         X, y = create_tf_df(current_df, td_model)
     
@@ -115,4 +126,4 @@ def train(base_model, td_model, save=True):
     print("Training completed. Final model saved as big_td_model.ubj")
 
 if __name__ == "__main__":
-    train(xgb_model, big_lgb_model, save=False)
+    train(xgb_model, big_model, save=True)

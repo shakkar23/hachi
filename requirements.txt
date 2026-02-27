@@ -6,3 +6,6 @@ duckdb
 matplotlib
 treelite
 lightgbm
+numba
+catboost
+torch

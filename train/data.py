@@ -7,7 +7,7 @@ DATABASE_PATH = "./training.duckdb"
 
 conn = duckdb.connect(DATABASE_PATH)
 
-sql_query = "SELECT * FROM training_data WHERE ABS(ground_truth) > 0 LIMIT 10000"
+sql_query = "SELECT * FROM training_data WHERE ABS(ground_truth) > 0"
 
 t = time.perf_counter()
 
