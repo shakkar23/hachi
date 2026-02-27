@@ -2,7 +2,7 @@ import xgboost as xgb
 import lightgbm as lgb
 from catboost import CatBoostRegressor
 
-device = "cuda"
+device = "cpu"
 
 xgb_model = xgb.XGBRegressor(
     max_depth=5,

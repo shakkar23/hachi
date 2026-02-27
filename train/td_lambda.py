@@ -8,7 +8,7 @@ import numba
 from numba import jit, float64, int64
 import time
 
-iterations = 50
+iterations = 10
 lmbd = 0.5
 
 @jit(nopython=True)
@@ -92,7 +92,7 @@ def train(base_model, td_model, save=True):
     current_df = df.copy()
     
     # Load initial model
-    base_model.load_model("models/td_model.ubj")
+    base_model.load_model("models/model.ubj")
 
     # Initial targets
     current_df['prediction'] = base_model.predict(current_df.drop(columns=['state', 'prediction'], errors='ignore'))
@@ -122,8 +122,8 @@ def train(base_model, td_model, save=True):
     if not save:
         return
 
-    td_model.save_model("models/big_td_model.ubj")
-    print("Training completed. Final model saved as big_td_model.ubj")
+    td_model.save_model("models/td_model.ubj")
+    print("Training completed. Final model saved as td_model.ubj")
 
 if __name__ == "__main__":
-    train(xgb_model, big_model, save=True)
+    train(xgb_model, xgb_model, save=True)
