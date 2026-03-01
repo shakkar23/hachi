@@ -1,5 +1,3 @@
-# predict_last100.py   ← separate file
-
 from data import X_train, X_test, y_train, y_test
 import xgboost as xgb
 import pandas as pd

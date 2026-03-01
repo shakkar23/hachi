@@ -2,16 +2,20 @@ import sqlite3
 import duckdb
 import numpy as np
 import pandas as pd
-from model import xgb_model
+from model import big_model as xgb_model
 
+states = None
 def get_feature_data():
-    DATABASE_PATH = "./15.duckdb"
+    global states
+    DATABASE_PATH = "./training.duckdb"
 
     conn = duckdb.connect(DATABASE_PATH)
 
     sql_query = "SELECT * FROM training_data LIMIT 1000"
 
     df = conn.execute(sql_query).fetchdf()
+
+    states = df['state']
 
     df = df.drop(columns=[
         "game_id",
@@ -20,12 +24,13 @@ def get_feature_data():
         "ground_truth"
     ])
 
+
     conn.close()
 
     return df
 
 def get_raw_data():
-    DATABASE_PATH = "./15.db"
+    DATABASE_PATH = "./database.db"
 
     conn = sqlite3.connect(DATABASE_PATH)
 
@@ -141,9 +146,11 @@ def view_predictions():
         
         # Get prediction
         prediction = fdf.iloc[idx]['prediction']
-        
+
         # Display boards side by side
         print_boards_side_by_side(p1_board, p2_board, prediction)
+        
+        print(f"State: {states.iloc[idx]}\n")
         
         # Wait for user input to continue
         if idx < len(fdf) - 1:
