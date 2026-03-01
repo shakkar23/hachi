@@ -115,6 +115,8 @@ def train(base_model, td_model, save=True):
         print(f"Mean Squared Error: {mse:.4f}")
         print(f"R² Score:       {r2:.4f}\n")
         
+        td_model.save_model("models/td_model.ubj")
+        
         # Boostrapped targets
         current_df['prediction'] = td_model.predict(current_df.drop(columns=['state', 'prediction'], errors='ignore'))
         X, y = create_tf_df(current_df, td_model)

@@ -15,6 +15,9 @@ pub struct Features {
     pub all_3x3s:[i16;512],
     pub all_3x3s_with_x:[i16;512],
     pub all_3x3s_with_y:[i16;512],
+    pub all_2x2s:[i16;16],
+    pub all_2x2s_with_x:[i16;16],
+    pub all_2x2s_with_y:[i16;16],
     pub meter: i16,
     pub combo: i16,
     pub b2b: i16,
@@ -57,6 +60,9 @@ pub fn extract_features(game: &game::GameState) -> Features {
         all_3x3s: hf.all_3x3s,
         all_3x3s_with_x: hf.all_3x3s_with_x,
         all_3x3s_with_y: hf.all_3x3s_with_y,
+        all_2x2s: hf.all_2x2s,
+        all_2x2s_with_x: hf.all_2x2s_with_x,
+        all_2x2s_with_y: hf.all_2x2s_with_y,
         meter: hf.meter,
         combo: hf.combo,
         b2b: hf.b2b,
@@ -149,9 +155,24 @@ impl Features {
                 columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_y", i, type_suffix));
             }
         }
+        
+        // all_2x2s array
+        for i in 0..16 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_2x2s", i, type_suffix));
+        }
+
+        // all_2x2s_with_x array
+        for i in 0..16 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_2x2s_with_x", i, type_suffix));
+        }
+
+        // all_2x2s_with_y array
+        for i in 0..16 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_2x2s_with_y", i, type_suffix));
+        }
 
         // hachi scalar
-        columns.push(format!("{}_{}{}", prefix, "meter", type_suffix));
+        columns.push(format!("{}_{}{}", prefix, "attack_received", type_suffix));
         columns.push(format!("{}_{}{}", prefix, "combo", type_suffix));
         columns.push(format!("{}_{}{}", prefix, "b2b", type_suffix));
 
@@ -188,6 +209,9 @@ impl Features {
         if use_3x3s {whitelist::top_100_3x3s.len()} else {0} +  // 3x3s
         if use_positional_3x3s {whitelist::top_100_3x3s_with_x.len()} else {0} + // 3x3s with x
         if use_positional_3x3s {whitelist::top_100_3x3s_with_y.len()} else {0} + // 3x3s with y
+        16 +  // 2x2s
+        16 + // 2x2s with x
+        16 + // 2x2s with y
         3 + // hachi scalars
         6 +  // sunbeam scalars
         4 +  // sunbeam_t_clears
@@ -262,6 +286,21 @@ impl Features {
             for i in whitelist::top_100_3x3s_with_y.iter() {
                 vals.push(self.all_3x3s_with_y[*i] as i16);
             }
+        }
+        
+        // 2x2s
+        for i in 0..16 {
+            vals.push(self.all_2x2s[i] as i16);
+        }
+
+        // 2x2s with x
+        for i in 0..16 {
+            vals.push(self.all_2x2s_with_x[i] as i16);
+        }
+        
+        // 2x2s with y
+        for i in 0..16 {
+            vals.push(self.all_2x2s_with_y[i] as i16);
         }
 
         vals.push(self.meter as i16);
