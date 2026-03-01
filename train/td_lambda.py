@@ -128,4 +128,4 @@ def train(base_model, td_model, save=True):
     print("Training completed. Final model saved as td_model.ubj")
 
 if __name__ == "__main__":
-    train(xgb_model, xgb_model, save=True)
+    train(xgb_model, big_model, save=True)
