@@ -18,6 +18,12 @@ pub struct Features {
     pub all_2x2s:[i16;16],
     pub all_2x2s_with_x:[i16;16],
     pub all_2x2s_with_y:[i16;16],
+    pub all_2x3s:[i16;64],
+    pub all_2x3s_with_x:[i16;64],
+    pub all_2x3s_with_y:[i16;64],
+    pub all_3x2s:[i16;64],
+    pub all_3x2s_with_x:[i16;64],
+    pub all_3x2s_with_y:[i16;64],
     pub meter: i16,
     pub combo: i16,
     pub b2b: i16,
@@ -60,9 +66,18 @@ pub fn extract_features(game: &game::GameState) -> Features {
         all_3x3s: hf.all_3x3s,
         all_3x3s_with_x: hf.all_3x3s_with_x,
         all_3x3s_with_y: hf.all_3x3s_with_y,
+
         all_2x2s: hf.all_2x2s,
         all_2x2s_with_x: hf.all_2x2s_with_x,
         all_2x2s_with_y: hf.all_2x2s_with_y,
+
+        all_2x3s: hf.all_2x3s,
+        all_2x3s_with_x: hf.all_2x3s_with_x,
+        all_2x3s_with_y: hf.all_2x3s_with_y,
+
+        all_3x2s: hf.all_3x2s,
+        all_3x2s_with_x: hf.all_3x2s_with_x,
+        all_3x2s_with_y: hf.all_3x2s_with_y,
         meter: hf.meter,
         combo: hf.combo,
         b2b: hf.b2b,
@@ -160,15 +175,39 @@ impl Features {
         for i in 0..16 {
             columns.push(format!("{}_{}{}{}", prefix, "all_2x2s", i, type_suffix));
         }
-
         // all_2x2s_with_x array
         for i in 0..16 {
             columns.push(format!("{}_{}{}{}", prefix, "all_2x2s_with_x", i, type_suffix));
         }
-
         // all_2x2s_with_y array
         for i in 0..16 {
             columns.push(format!("{}_{}{}{}", prefix, "all_2x2s_with_y", i, type_suffix));
+        }
+
+        // all_2x3s array
+        for i in 0..64 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_2x3s", i, type_suffix));
+        }
+        // all_2x3s_with_x array
+        for i in 0..64 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_2x3s_with_x", i, type_suffix));
+        }
+        // all_2x3s_with_y array
+        for i in 0..64 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_2x3s_with_y", i, type_suffix));
+        }
+        
+        // all_3x2s array
+        for i in 0..64 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_3x2s", i, type_suffix));
+        }
+        // all_3x2s_with_x array
+        for i in 0..64 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_3x2s_with_x", i, type_suffix));
+        }
+        // all_3x2s_with_y array
+        for i in 0..64 {
+            columns.push(format!("{}_{}{}{}", prefix, "all_3x2s_with_y", i, type_suffix));
         }
 
         // hachi scalar
@@ -212,6 +251,15 @@ impl Features {
         16 +  // 2x2s
         16 + // 2x2s with x
         16 + // 2x2s with y
+        
+        64 +  // 2x3s
+        64 + // 2x3s with x
+        64 + // 2x3s with y
+        
+        64 +  // 3x2s
+        64 + // 3x2s with x
+        64 + // 3x2s with y
+
         3 + // hachi scalars
         6 +  // sunbeam scalars
         4 +  // sunbeam_t_clears
@@ -292,15 +340,39 @@ impl Features {
         for i in 0..16 {
             vals.push(self.all_2x2s[i] as i16);
         }
-
         // 2x2s with x
         for i in 0..16 {
             vals.push(self.all_2x2s_with_x[i] as i16);
         }
-        
         // 2x2s with y
         for i in 0..16 {
             vals.push(self.all_2x2s_with_y[i] as i16);
+        }
+        
+        // 2x3s
+        for i in 0..64 {
+            vals.push(self.all_2x3s[i] as i16);
+        }
+        // 2x3s with x
+        for i in 0..64 {
+            vals.push(self.all_2x3s_with_x[i] as i16);
+        }
+        // 2x3s with y
+        for i in 0..64 {
+            vals.push(self.all_2x3s_with_y[i] as i16);
+        }
+        
+        // 3x2s
+        for i in 0..64 {
+            vals.push(self.all_3x2s[i] as i16);
+        }
+        // 3x2s with x
+        for i in 0..64 {
+            vals.push(self.all_3x2s_with_x[i] as i16);
+        }
+        // 3x2s with y
+        for i in 0..64 {
+            vals.push(self.all_3x2s_with_y[i] as i16);
         }
 
         vals.push(self.meter as i16);

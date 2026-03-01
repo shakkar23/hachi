@@ -178,6 +178,76 @@ fn get_2x2s(board: &Board) -> ([i16; 16], [i16; 16], [i16; 16]) {
     (counts, counts_with_x, counts_with_y)
 }
 
+fn get_2x3s(board: &Board) -> ([i16; 64], [i16; 64], [i16; 64]) {
+    
+    let height = board.heights().iter().max().unwrap().clone();
+
+    let mut counts = [0; 64];
+    let mut counts_with_x = [0; 64];
+    let mut counts_with_y = [0; 64];
+
+    // max encoding sizes
+    const x_cutoff:i16 = i16::MAX.ilog(9) as i16; // 5
+    const y_cutoff:i16 = i16::MAX.ilog(10) as i16; // 4
+
+    for y in (0..height).rev() {
+        for x in 0..9 {
+            let mask = [0b111 << y, 0b111 << y];
+            let cols:&[u64] = &board.cols[x..=x+1];
+            let window = [
+                (cols[0] & mask[0]) >> y,
+                (cols[1] & mask[1]) >> y
+            ];
+            // ID of 2x2 filter that matches exactly
+            let idx = (window[0] | (window[1] << 3)) as usize;
+
+            // increment counter for how often this pattern has appeared
+            counts[idx] += 1;
+
+            counts_with_x[idx] += x as i16;
+
+            counts_with_y[idx] += y as i16;
+        }
+    }
+    (counts, counts_with_x, counts_with_y)
+}
+
+
+fn get_3x2s(board: &Board) -> ([i16; 64], [i16; 64], [i16; 64]) {
+    
+    let height = board.heights().iter().max().unwrap().clone();
+
+    let mut counts = [0; 64];
+    let mut counts_with_x = [0; 64];
+    let mut counts_with_y = [0; 64];
+
+    // max encoding sizes
+    const x_cutoff:i16 = i16::MAX.ilog(9) as i16; // 5
+    const y_cutoff:i16 = i16::MAX.ilog(10) as i16; // 4
+
+    for y in (0..height).rev() {
+        for x in 0..8 {
+            let mask = [0b11 << y, 0b11 << y, 0b11 << y];
+            let cols:&[u64] = &board.cols[x..=x+2];
+            let window = [
+                (cols[0] & mask[0]) >> y,
+                (cols[1] & mask[1]) >> y,
+                (cols[2] & mask[2]) >> y
+            ];
+            // ID of 2x2 filter that matches exactly
+            let idx = (window[0] | (window[1] << 2 | window[2] << 4)) as usize;
+
+            // increment counter for how often this pattern has appeared
+            counts[idx] += 1;
+
+            counts_with_x[idx] += x as i16;
+
+            counts_with_y[idx] += y as i16;
+        }
+    }
+    (counts, counts_with_x, counts_with_y)
+}
+
 pub struct HachiFeatures {
     pub heights:[u32;10],
     pub height_differences:[i16;9],
@@ -193,6 +263,12 @@ pub struct HachiFeatures {
     pub all_2x2s:[i16;16],
     pub all_2x2s_with_x:[i16;16],
     pub all_2x2s_with_y:[i16;16],
+    pub all_2x3s:[i16;64],
+    pub all_2x3s_with_x:[i16;64],
+    pub all_2x3s_with_y:[i16;64],
+    pub all_3x2s:[i16;64],
+    pub all_3x2s_with_x:[i16;64],
+    pub all_3x2s_with_y:[i16;64],
     pub meter: i16,
     pub combo: i16,
     pub b2b: i16,
@@ -202,6 +278,8 @@ pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
     let mut board = gamestate.board;
     let (all_3x3s, all_3x3s_with_x, all_3x3s_with_y) = get_3x3s(&board);
     let (all_2x2s, all_2x2s_with_x, all_2x2s_with_y) = get_2x2s(&board);
+    let (all_2x3s, all_2x3s_with_x, all_2x3s_with_y) = get_2x3s(&board);
+    let (all_3x2s, all_3x2s_with_x, all_3x2s_with_y) = get_3x2s(&board);
     HachiFeatures {
         heights: get_heights(&board),
         height_differences: get_height_differences(&board),
@@ -217,6 +295,12 @@ pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
         all_2x2s: all_2x2s,
         all_2x2s_with_x: all_2x2s_with_x,
         all_2x2s_with_y: all_2x2s_with_y,
+        all_2x3s: all_2x3s,
+        all_2x3s_with_x: all_2x3s_with_x,
+        all_2x3s_with_y: all_2x3s_with_y,
+        all_3x2s: all_3x2s,
+        all_3x2s_with_x: all_3x2s_with_x,
+        all_3x2s_with_y: all_3x2s_with_y,
         meter: gamestate.damage_received as i16,
         combo: gamestate.combo as i16,
         b2b: gamestate.b2b as i16,
