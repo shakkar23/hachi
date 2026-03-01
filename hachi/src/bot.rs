@@ -35,20 +35,6 @@ use tetris::state::{State};
     minimax depth: 5
     minimax root width: 60
 
-    Explanation:
-
-    Branching factor progression is
-
-    60, 26, 11, 5, 2, 1.
-
-    Number of beam searches = 26+11+5+2+1 = 45
-
-    45 beam searches -> 100*30*3*45 = 9,000 * 45 = 405,000 calls to light eval.
-
-    product of branches -> 171,600 calls to heavy eval.
-
-    Linear eval benches at ~3M / second and heavy eval at 1M / second using distilled CatBoost on a i7-8665U.
-
 */
 
 pub fn beam_search(state: &State, depth: i32, width: usize, max_moves: usize) -> Vec<Move> {

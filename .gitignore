@@ -10,7 +10,8 @@ catboost_info
 15.db
 15.duckdb
 out.txt
-
+importances.txt
+Cargo.lock
 
 # Added by cargo
 
