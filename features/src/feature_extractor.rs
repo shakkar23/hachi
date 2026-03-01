@@ -1,4 +1,4 @@
-use crate::hachi;
+use crate::hachi_features;
 use crate::game;
 use crate::static_features;
 use crate::whitelist;
@@ -49,10 +49,9 @@ pub struct Row {
     pub features:    (Features, Features),
 }
 
-
 pub fn extract_features(game: &game::GameState) -> Features {
     let sf = static_features::get_static_features(&game);
-    let hf = hachi::get_hachi_features(&game);
+    let hf = hachi_features::get_hachi_features(&game);
 
     Features {
         heights: hf.heights,

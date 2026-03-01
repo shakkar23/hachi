@@ -9,18 +9,11 @@ use duckdb::arrow::record_batch::RecordBatch;
 use rusqlite::{Connection, Result};
 use duckdb::{Connection as DuckConnection, Result as DuckResult, Error as DuckError};
 
-mod hachi;
-mod static_features;
-mod game;
-mod feature_extractor;
-mod arrow;
-mod whitelist;
+use features::feature_extractor::{Features, Row};
 
-use crate::feature_extractor::{Features, Row};
+use features::arrow::rows_to_record_batch;
 
-use crate::arrow::rows_to_record_batch;
-
-use crate::game::{GameState,Move,Datum,State};
+use features::game::{GameState,Move,Datum,State};
 
 fn to_piece(s:&str) -> Result<Piece, ()> {
     match s {
@@ -231,8 +224,8 @@ fn create_dataset(data: &[Datum], output_db_path: &str) -> DuckResult<()> {
 
     let mut rows: Vec<Row> = data.par_iter()
         .map(|d| {
-            let p1_attrs = feature_extractor::extract_features(&d.p1);
-            let p2_attrs = feature_extractor::extract_features(&d.p2);
+            let p1_attrs = features::feature_extractor::extract_features(&d.p1);
+            let p2_attrs = features::feature_extractor::extract_features(&d.p2);
 
             Row {
                 features: (p1_attrs, p2_attrs),
