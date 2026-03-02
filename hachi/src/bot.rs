@@ -1,11 +1,10 @@
-use features::game::{GameState};
-use features::feature_extractor::{Features, extract_features};
-
 use tetris::board::Board;
 use tetris::moves::Move;
 use tetris::piece::{Piece, Rotation};
 use tetris::movegen::{movegen};
 use tetris::state::{State};
+
+use crate::eval::{light_eval, heavy_eval}
 
 /*
     Nested search combining minimax with beam search.
@@ -37,11 +36,97 @@ use tetris::state::{State};
 
 */
 
-pub fn beam_search(state: &State, depth: i32, width: usize, max_moves: usize) -> Vec<Move> {
+pub struct MacroState {
+    pub p1: State,
+    pub p2: State
+}
+
+/*
+    We use two transposition tables.
+
+    The first transposition table is used for beam search and memoizes the results of light eval and movegen.
+
+    The second transposition table is used for alpha beta pruning and stores post-pruning moves and aspiration windows.
+*/
+
+// hash types
+
+pub struct PseudoHash(u64);
+pub struct ExactHash(u64);
+
+// for beam search
+
+pub struct BTable {
+    pub value: HashMap<PseudoHash, i32>, // light evaluation
+    pub legal_moves: HashMap<PseudoHash, Vec<Move>>, // moves found by movegen (used for beam search)
+    pub top_moves: HashMap<PseudoHash, Vec<Move>>, // moves selected by beam search (used for alpha beta)
+}
+
+// for alpha beta
+
+pub struct TTEntry {
+    pub bound: (i32, Bound), // bound value, heavy evaluation
+    pub depth: u16,
+}
+
+type MTable = HashMap<ExactHash, TTEntry>;
+
+enum Bound {
+    Exact,
+    Lower,
+    Upper,
+}
+
+// hash that ignores vertical translations 
+pub fn beam_hash(state: &State) -> PseudoHash {
 
 }
 
-pub fn minimax_search(gamestate: &GameState, depth: i32) -> Move {
+// hash preserving all information
+pub fn minimax_hash(state: &MacroState) -> ExactHash {
+
+}
+
+/*
+    Initialise new search, including transposition tables
+    Then return best move
+*/
+
+pub fn search(
+    state: &MacroState,
+    depth: i32
+) -> Move {
+
+}
+
+/*
+    Generated max_moves moves, sorted according to goodness.
+
+    Exit early if # of candidates <= max_moves.
+*/
+
+pub fn beam_search(
+    state: &State, 
+    btable: &mut BTable,
+    depth: i32, 
+    width: usize, 
+    max_moves: usize
+) -> Vec<Move> {
+
+}
+
+/*
+    Alpha-beta search using beam search for move ordering and early pruning.
+
+
+*/
+
+pub fn alpha_beta_search(
+    state: &MacroState,
+    btable: &mut BTable,
+    mtable: &mut MTable,
+    depth: i32
+) -> Move {
     Move (
         x: 0,
         y: 0,
