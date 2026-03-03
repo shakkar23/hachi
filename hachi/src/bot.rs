@@ -27,7 +27,7 @@ use crate::eval::{light_eval, lock_eval, heavy_eval};
     This seems like a lot, but nearly all interior nodes hit the transposition table,
     because there are very few player interactions that can affect the opponent's legal moves.
 
-    To be more specific, we define a pruning decay rate according to desired search depth:
+    To be more specific, we can define a pruning decay rate according to desired search depth:
 
     gamma = starting_width^(-1/depth)
 
@@ -195,11 +195,11 @@ pub fn beam_search(
     for d in 0..depth {
 
         // crunch beam width
-        new_beam.select_nth_unstable_by_key(width - 1, |a| {
-            a.score
+        beam.select_nth_unstable_by_key(width - 1, |a| {
+            -a.score
         });
 
-        new_beam.truncate(width);
+        beam.truncate(width);
 
         for item in &beam {
 
@@ -235,28 +235,184 @@ pub fn beam_search(
         root_move.score = cmp::max(item.score, root_move.score);
     }
 
-    root_moves.select_nth_unstable_by_key(max_moves - 1, |a| a.score);
+    root_moves.select_nth_unstable_by_key(max_moves - 1, |a| -a.score);
     root_moves.truncate(max_moves);
     root_moves.into_iter().map(|m| m.value).collect()
 }
 
 /*
     Alpha-beta search using beam search for move ordering and early pruning.
-
-
 */
-
 pub fn alpha_beta_search(
     state: &MacroState,
     btable: &mut BTable,
     mtable: &mut MTable,
-    depth: i32
+    depth: i32,
 ) -> Move {
-    Move {
-        x: 0,
-        y: 0,
+    let mut best_move = Move {
+        x: 0, y: 0,
         r: Rotation::North,
         kind: Piece::O,
         tspin: None,
+    };
+    let mut alpha = i32::MIN + 1; // avoid overflow on negation
+    let beta = i32::MAX;
+
+    // Beam search to get candidate moves, ordered by quality
+    let beam_width = 32usize.pow(1).min(100);
+    let max_moves = 60;
+    let candidates = beam_search(&state.p1, btable, 3, beam_width, max_moves);
+
+    // Cache candidates
+    let p1_hash = pseudo_hash(&state.p1.state);
+    btable.top_moves.insert(p1_hash, candidates.clone());
+
+    for mv in &candidates {
+        let mut child_macro = MacroState {
+            p1: FullState {
+                state: state.p1.state.clone(),
+                queue: state.p1.queue,
+            },
+            p2: FullState {
+                state: state.p2.state.clone(),
+                queue: state.p2.queue,
+            },
+        };
+        child_macro.p1.state.make(mv, &child_macro.p1.queue);
+
+        let score = -negamax(
+            &child_macro,
+            btable,
+            mtable,
+            depth - 1,
+            -beta,
+            -alpha,
+            false, // next ply is opponent (p2)
+        );
+
+        if score > alpha {
+            alpha = score;
+            best_move = *mv;
+        }
     }
+
+    best_move
+}
+
+/// Negamax with alpha-beta pruning.
+/// `maximizing` = true means it's p1's turn, false = p2's turn.
+fn negamax(
+    state: &MacroState,
+    btable: &mut BTable,
+    mtable: &mut MTable,
+    depth: i32,
+    mut alpha: i32,
+    beta: i32,
+    maximizing: bool,
+) -> i32 {
+    let hash = exact_hash(state);
+
+    // Transposition table lookup
+    if let Some(entry) = mtable.get(&hash) {
+        if entry.depth >= depth as u16 {
+            let (value, ref bound) = entry.bound;
+            match bound {
+                Bound::Exact => return value,
+                Bound::Lower => {
+                    if value >= beta { return value; }
+                }
+                Bound::Upper => {
+                    if value <= alpha { return value; }
+                }
+            }
+        }
+    }
+
+    // Terminal / horizon node: full evaluation
+    if depth <= 0 {
+        let score = heavy_eval(&state);
+        mtable.insert(hash, TTEntry {
+            bound: (score, Bound::Exact),
+            depth: 0,
+        });
+        return score;
+    }
+
+    // Select which player acts this ply
+    let (active, _passive) = if maximizing {
+        (&state.p1, &state.p2)
+    } else {
+        (&state.p2, &state.p1)
+    };
+
+    let beam_width = 32;//cmp::max(4, 32 >> depth) as usize;
+    let max_moves  = 16;//cmp::max(2, 16 >> depth) as usize;
+
+    let active_hash = pseudo_hash(&active.state);
+    let candidates: Vec<Move> = if let Some(cached) = btable.top_moves.get(&active_hash) {
+        cached.clone()
+    } else {
+        let moves = beam_search(active, btable, 2, beam_width, max_moves);
+        btable.top_moves.insert(active_hash, moves.clone());
+        moves
+    };
+
+    if candidates.is_empty() {
+        // No moves available — treat as terminal
+        let score = heavy_eval(state);
+        return score;
+    }
+
+    let original_alpha = alpha;
+    let mut best = i32::MIN + 1;
+
+    for mv in &candidates {
+        // Build child MacroState
+        let mut child = MacroState {
+            p1: FullState { state: state.p1.state.clone(), queue: state.p1.queue },
+            p2: FullState { state: state.p2.state.clone(), queue: state.p2.queue },
+        };
+
+        if maximizing {
+            child.p1.state.make(mv, &child.p1.queue);
+        } else {
+            child.p2.state.make(mv, &child.p2.queue);
+        }
+
+        let score = -negamax(
+            &child,
+            btable,
+            mtable,
+            depth - 1,
+            -beta,
+            -alpha,
+            !maximizing,
+        );
+
+        if score > best {
+            best = score;
+        }
+        if score > alpha {
+            alpha = score;
+        }
+        if alpha >= beta {
+            break; // beta cut-off
+        }
+    }
+
+    // Store result in transposition table with appropriate bound
+    let bound = if best <= original_alpha {
+        Bound::Upper
+    } else if best >= beta {
+        Bound::Lower
+    } else {
+        Bound::Exact
+    };
+
+    mtable.insert(hash, TTEntry {
+        bound: (best, bound),
+        depth: depth as u16,
+    });
+
+    best
 }
