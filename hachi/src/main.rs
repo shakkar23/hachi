@@ -4,6 +4,9 @@ use ort::{
     value::TensorRef,
 };
 
+mod bot;
+mod eval;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut session = Session::builder()?
         .with_optimization_level(GraphOptimizationLevel::Level3)?

@@ -4,7 +4,11 @@ use tetris::piece::{Piece, Rotation};
 use tetris::movegen::{movegen};
 use tetris::state::{State};
 
-use crate::eval::{light_eval, heavy_eval}
+use std::collections::HashMap;
+use std::mem;
+use std::cmp;
+
+use crate::eval::{light_eval, lock_eval, heavy_eval};
 
 /*
     Nested search combining minimax with beam search.
@@ -36,9 +40,14 @@ use crate::eval::{light_eval, heavy_eval}
 
 */
 
+pub struct FullState {
+    pub state: State,
+    pub queue: [Piece;5]
+}
+
 pub struct MacroState {
-    pub p1: State,
-    pub p2: State
+    pub p1: FullState,
+    pub p2: FullState
 }
 
 /*
@@ -51,13 +60,16 @@ pub struct MacroState {
 
 // hash types
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PseudoHash(u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExactHash(u64);
 
 // for beam search
 
 pub struct BTable {
-    pub value: HashMap<PseudoHash, i32>, // light evaluation
+    pub values: HashMap<PseudoHash, i32>, // light evaluation
     pub legal_moves: HashMap<PseudoHash, Vec<Move>>, // moves found by movegen (used for beam search)
     pub top_moves: HashMap<PseudoHash, Vec<Move>>, // moves selected by beam search (used for alpha beta)
 }
@@ -78,13 +90,13 @@ enum Bound {
 }
 
 // hash that ignores vertical translations 
-pub fn beam_hash(state: &State) -> PseudoHash {
-
+pub fn pseudo_hash(state: &State) -> PseudoHash {
+    PseudoHash(0)
 }
 
 // hash preserving all information
-pub fn minimax_hash(state: &MacroState) -> ExactHash {
-
+pub fn exact_hash(state: &MacroState) -> ExactHash {
+    ExactHash(0)
 }
 
 /*
@@ -96,7 +108,13 @@ pub fn search(
     state: &MacroState,
     depth: i32
 ) -> Move {
-
+    Move {
+        x: 0,
+        y: 0,
+        r: Rotation::North,
+        kind: Piece::O,
+        tspin: None,
+    }
 }
 
 /*
@@ -105,14 +123,121 @@ pub fn search(
     Exit early if # of candidates <= max_moves.
 */
 
+struct BeamItem {
+    pub state: State,
+    pub root_idx: usize,
+    pub hash: PseudoHash,
+    pub score: i32
+}
+
+struct ScoredMove {
+    pub value: Move,
+    pub score: i32
+}
+
+fn tt_movegen(btable: &mut BTable, state: &State, queue: &[Piece]) -> Vec<Move> {
+    let hash = pseudo_hash(state);
+    btable.legal_moves.entry(hash).or_insert_with(|| {
+        let current = queue[state.next];
+        let hold = state
+            .hold
+            .unwrap_or_else(|| queue[state.next + 1]);
+
+        let mut moves = movegen(&state.board, current);
+
+        if hold != current {
+            moves.extend(movegen(&state.board, hold));
+        }
+
+        moves
+    }).clone()
+}
+
 pub fn beam_search(
-    state: &State, 
-    btable: &mut BTable,
+    root: &FullState, 
+    mut btable: &mut BTable,
     depth: i32, 
     width: usize, 
     max_moves: usize
 ) -> Vec<Move> {
 
+    let mut beam: Vec<BeamItem> = Vec::new();
+
+    let mut new_beam: Vec<BeamItem> = Vec::new();
+
+    let queue = root.queue; // queue is fixed
+
+    let mut root_moves:Vec<ScoredMove> = tt_movegen(&mut btable, &root.state, &queue).into_iter().map(|m| {
+        ScoredMove{value: m, score: i32::MIN}
+    }).collect();
+
+    // expand root
+
+    for idx in 0..root_moves.len() {
+        let mv = root_moves[idx].value;
+        let mut child_state = root.state.clone();
+        let lock = child_state.make(&mv, &queue);
+        let child_hash = pseudo_hash(&child_state);
+        let score = btable.values.entry(child_hash).or_insert_with(|| {
+            light_eval(&child_state)
+        });
+
+        beam.push(BeamItem{
+            state: child_state,
+            root_idx: idx,
+            hash: child_hash,
+            score: *score + lock_eval(&lock)
+        });
+    }
+
+    // do beam search
+
+    for d in 0..depth {
+
+        // crunch beam width
+        new_beam.select_nth_unstable_by_key(width - 1, |a| {
+            a.score
+        });
+
+        new_beam.truncate(width);
+
+        for item in &beam {
+
+            let state = &item.state;
+
+            // movegen
+            let moves = tt_movegen(&mut btable, &state, &queue);
+
+            // create new nodes
+            for mv in &moves {
+                let mut child_state = state.clone();
+                let lock = child_state.make(&mv, &queue);
+                let child_hash = pseudo_hash(&child_state);
+                let score = btable.values.entry(child_hash).or_insert_with(|| {
+                    light_eval(&child_state)
+                });
+
+                new_beam.push(BeamItem{
+                    state: child_state,
+                    root_idx: item.root_idx,
+                    hash: child_hash,
+                    score: *score + lock_eval(&lock)
+                });
+            }
+        }
+
+        mem::swap(&mut beam, &mut new_beam);
+        new_beam.clear();
+    }
+
+    for item in &beam {
+        let root_move = &mut root_moves[item.root_idx];
+        root_move.score = cmp::max(item.score, root_move.score);
+    }
+
+    root_moves.select_nth_unstable_by_key(max_moves - 1, |a| a.score);
+    root_moves.truncate(max_moves);
+    root_moves.into_iter().map(|m| m.value).collect()
 }
 
 /*
@@ -127,11 +252,11 @@ pub fn alpha_beta_search(
     mtable: &mut MTable,
     depth: i32
 ) -> Move {
-    Move (
+    Move {
         x: 0,
         y: 0,
         r: Rotation::North,
         kind: Piece::O,
         tspin: None,
-    )
+    }
 }
