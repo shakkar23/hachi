@@ -1,4 +1,4 @@
-use rusqlite::fallible_iterator::IteratorExt;
+
 use tetris::board::Board;
 use tetris::moves::Move;
 use tetris::piece::{Piece,Rotation};

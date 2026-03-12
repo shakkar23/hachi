@@ -6,6 +6,7 @@ use ort::{
 
 mod bot;
 mod eval;
+mod state;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut session = Session::builder()?

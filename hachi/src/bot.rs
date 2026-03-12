@@ -4,6 +4,8 @@ use tetris::piece::{Piece, Rotation};
 use tetris::movegen::{movegen};
 use tetris::state::{State};
 
+use crate::state::{FullState, MacroState};
+
 use std::collections::HashMap;
 use std::mem;
 use std::cmp;
@@ -40,15 +42,6 @@ use crate::eval::{light_eval, lock_eval, heavy_eval};
 
 */
 
-pub struct FullState {
-    pub state: State,
-    pub queue: [Piece;5]
-}
-
-pub struct MacroState {
-    pub p1: FullState,
-    pub p2: FullState
-}
 
 /*
     We use two transposition tables.
@@ -60,11 +53,9 @@ pub struct MacroState {
 
 // hash types
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PseudoHash(u64);
+type PseudoHash = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ExactHash(u64);
+type ExactHash = u64;
 
 // for beam search
 
@@ -89,14 +80,19 @@ enum Bound {
     Upper,
 }
 
-// hash that ignores vertical translations 
+// hash that preserves legal moves
 pub fn pseudo_hash(state: &State) -> PseudoHash {
-    PseudoHash(0)
+    state.board.cols.iter().fold(0, |acum, &item|
+        acum ^ (acum << 19) ^ (acum >> 11) ^ item 
+    )
 }
 
 // hash preserving all information
 pub fn exact_hash(state: &MacroState) -> ExactHash {
-    ExactHash(0)
+    let mut hash: u64 = 0;
+    hash ^= pseudo_hash(&state.p1.state) << 32;
+    hash ^= pseudo_hash(&state.p2.state);
+    hash
 }
 
 /*
@@ -108,13 +104,13 @@ pub fn search(
     state: &MacroState,
     depth: i32
 ) -> Move {
-    Move {
-        x: 0,
-        y: 0,
-        r: Rotation::North,
-        kind: Piece::O,
-        tspin: None,
-    }
+    let mut btable = BTable {
+        values: HashMap::new(),
+        legal_moves: HashMap::new(),
+        top_moves: HashMap::new(),
+    };
+    let mut mtable: MTable = HashMap::new();
+    alpha_beta_search(state, &mut btable, &mut mtable, depth)
 }
 
 /*
@@ -258,10 +254,10 @@ pub fn alpha_beta_search(
     let mut alpha = i32::MIN + 1; // avoid overflow on negation
     let beta = i32::MAX;
 
-    // Beam search to get candidate moves, ordered by quality
-    let beam_width = 32usize.pow(1).min(100);
-    let max_moves = 60;
-    let candidates = beam_search(&state.p1, btable, 3, beam_width, max_moves);
+    let beam_width = 100;
+    let beam_depth = 3;
+    let max_moves: usize = 60;
+    let candidates = beam_search(&state.p1, btable, beam_depth, beam_width, max_moves);
 
     // Cache candidates
     let p1_hash = pseudo_hash(&state.p1.state);
@@ -284,6 +280,8 @@ pub fn alpha_beta_search(
             &child_macro,
             btable,
             mtable,
+            beam_width,
+            cmp::max(max_moves >> 1, 2),
             depth - 1,
             -beta,
             -alpha,
@@ -305,6 +303,8 @@ fn negamax(
     state: &MacroState,
     btable: &mut BTable,
     mtable: &mut MTable,
+    beam_width: usize,
+    max_moves: usize,
     depth: i32,
     mut alpha: i32,
     beta: i32,
@@ -345,9 +345,6 @@ fn negamax(
         (&state.p2, &state.p1)
     };
 
-    let beam_width = 32;//cmp::max(4, 32 >> depth) as usize;
-    let max_moves  = 16;//cmp::max(2, 16 >> depth) as usize;
-
     let active_hash = pseudo_hash(&active.state);
     let candidates: Vec<Move> = if let Some(cached) = btable.top_moves.get(&active_hash) {
         cached.clone()
@@ -383,6 +380,8 @@ fn negamax(
             &child,
             btable,
             mtable,
+            beam_width,
+            cmp::max(max_moves >> 1, 2 as usize),
             depth - 1,
             -beta,
             -alpha,
