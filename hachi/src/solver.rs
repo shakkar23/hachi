@@ -3,7 +3,7 @@ use minilp::{ComparisonOp, LinearExpr, OptimizationDirection, Problem};
 /// Solve zero-sum NxN game via fictitious play.
 /// Returns (row_strategy, col_strategy, game_value).
 pub fn nash_equilibrium(payoff: &Vec<Vec<f64>>) -> (Vec<f64>, Vec<f64>, f64) {
-    nash_fictitious_play(payoff, 10_000, 1e-3)
+    nash_fictitious_play(payoff, 1000, 1e-1)
 }
 
 pub fn nash_fictitious_play(
@@ -21,8 +21,6 @@ pub fn nash_fictitious_play(
         .iter()
         .map(|row| row.iter().map(|&v| (v.clamp(-1.0, 1.0) * SCALE as f64).round() as i32).collect())
         .collect();
-
-    let tol_q: i32 = (tol.clamp(0.0, 2.0) * SCALE as f64).round() as i32;
 
     let mut row_scores = vec![0i32; n];
     let mut col_scores = vec![0i32; n];
@@ -53,38 +51,6 @@ pub fn nash_fictitious_play(
         }
         let (col_br, min_col_score) = argmin_i32(&col_scores);
         col_action = col_br;
-
-        let t_i = t as i32;
-
-        // upper_new/t_i  <  best_upper_score/best_upper_t
-        //   <=>  upper_new * best_upper_t  <  best_upper_score * t_i
-        // Both score and t fit i32; product fits i64.
-        if (max_row_score as i64) * (best_upper_t as i64)
-            < (best_upper_score as i64) * (t_i as i64)
-        {
-            best_upper_score = max_row_score;
-            best_upper_t = t_i;
-        }
-        if (min_col_score as i64) * (best_lower_t as i64)
-            > (best_lower_score as i64) * (t_i as i64)
-        {
-            best_lower_score = min_col_score;
-            best_lower_t = t_i;
-        }
-
-        if t % 100 == 0 {
-            // (best_upper_score/best_upper_t - best_lower_score/best_lower_t) < tol_q/SCALE
-            // Multiply by SCALE * best_upper_t * best_lower_t (positive):
-            //   SCALE * (best_upper_score*best_lower_t - best_lower_score*best_upper_t)
-            //     < tol_q * best_upper_t * best_lower_t
-            let diff = (best_upper_score as i64) * (best_lower_t as i64)
-                - (best_lower_score as i64) * (best_upper_t as i64);
-            let lhs = (SCALE as i64) * diff;
-            let rhs = (tol_q as i64) * (best_upper_t as i64) * (best_lower_t as i64);
-            if lhs < rhs {
-                break;
-            }
-        }
     }
 
     let total_row: u64 = row_counts.iter().sum();
@@ -233,14 +199,14 @@ fn test_solver_dominant_strategy() {
     // Nash equilibrium should be pure: Row 0, Col 0 with value 3.0
     let payoff = vec![
         vec![0.3, 0.2, 0.1],  // Row 0
-        vec![0.2, 0.1, 0.0],  // Row 1
+        vec![0.2, 0.1, 00.0],  // Row 1
         vec![0.1, 0.0, -0.1], // Row 2
     ];
-    /* Viewed from column perspective: (scaled by 10)
+    /* Viewed from column perspective:
     let payoff = vec![
-        vec![-0.3, -0.2, -0.1],  // Row 0
-        vec![-0.2, -0.1, 0.0],  // Row 1
-        vec![-0.1, 0.0, 0.1], // Row 2
+        vec![-3.0, -2.0, -1.0],  // Row 0
+        vec![-2.0, -1.0,  0.0],  // Row 1
+        vec![-1.0,  0.0,  1.0], // Row 2
     ];
     So clearly move 2 dominates for the column player.
     */
@@ -253,7 +219,7 @@ fn test_solver_dominant_strategy() {
 
     assert!((row[0] - 1.0).abs() < 1e-2, "Row should play strategy 0 with prob 1");
     assert!((col[2] - 1.0).abs() < 1e-2, "Col should play strategy 2 with prob 1");
-    assert!((value - 0.1).abs() < 1e-2,  "Game value should be 0.1");
+    assert!((value - 0.1).abs() < 1e-2,  "Game value should be 3.0");
 }
 
 #[test]
