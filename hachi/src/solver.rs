@@ -3,7 +3,7 @@ use minilp::{ComparisonOp, LinearExpr, OptimizationDirection, Problem};
 /// Solve zero-sum NxN game via fictitious play.
 /// Returns (row_strategy, col_strategy, game_value).
 pub fn nash_equilibrium(payoff: &Vec<Vec<f64>>) -> (Vec<f64>, Vec<f64>, f64) {
-    nash_fictitious_play(payoff, 100_000, 5e-2)
+    nash_fictitious_play(payoff, 10_000, 1e-3)
 }
 
 pub fn nash_fictitious_play(
@@ -13,53 +13,77 @@ pub fn nash_fictitious_play(
 ) -> (Vec<f64>, Vec<f64>, f64) {
     let n = payoff.len();
     assert!(n > 0 && payoff.iter().all(|r| r.len() == n), "Must be NxN matrix");
+    assert!(max_iters <= (1 << 16), "max_iters must be <= 2^16");
 
-    // Cumulative payoff to each row action given history of col plays:
-    // row_scores[i] = sum over past col plays j of payoff[i][j]
-    let mut row_scores = vec![0.0; n];
-    // col_scores[j] = sum over past row plays i of payoff[i][j]
-    // (col minimises, so it picks argmin)
-    let mut col_scores = vec![0.0; n];
+    const SCALE: i32 = (1 << 15) - 1; // 32767
 
-    // Counts of each action played
+    let payoff_q: Vec<Vec<i32>> = payoff
+        .iter()
+        .map(|row| row.iter().map(|&v| (v.clamp(-1.0, 1.0) * SCALE as f64).round() as i32).collect())
+        .collect();
+
+    let tol_q: i32 = (tol.clamp(0.0, 2.0) * SCALE as f64).round() as i32;
+
+    let mut row_scores = vec![0i32; n];
+    let mut col_scores = vec![0i32; n];
     let mut row_counts = vec![0u64; n];
     let mut col_counts = vec![0u64; n];
 
-    // Seed: both play action 0 first round
     let mut row_action = 0usize;
     let mut col_action = 0usize;
 
-    let mut best_upper = f64::INFINITY;
-    let mut best_lower = f64::NEG_INFINITY;
+    // Track tightest bounds in quantized score units (i.e. score, not score/t).
+    // best_upper_score / best_upper_t  is the tightest upper bound seen.
+    let mut best_upper_score: i32 = i32::MAX;
+    let mut best_upper_t: i32 = 1;
+    let mut best_lower_score: i32 = i32::MIN;
+    let mut best_lower_t: i32 = 1;
 
     for t in 1..=max_iters {
-        // Row player responds
         row_counts[row_action] += 1;
         for i in 0..n {
-            row_scores[i] += payoff[i][col_action];
+            row_scores[i] += payoff_q[i][col_action];
         }
+        let (row_br, max_row_score) = argmax_i32(&row_scores);
+        row_action = row_br;
 
-        let (row_best_response, max_row_score) = argmax(&row_scores);
-        row_action = row_best_response;
-
-        // Column player responds
         col_counts[col_action] += 1;
         for j in 0..n {
-            col_scores[j] += payoff[row_action][j];
+            col_scores[j] += payoff_q[row_action][j];
         }
-        
-        let (column_best_response, min_col_score) = argmin(&col_scores);
-        col_action = column_best_response;
+        let (col_br, min_col_score) = argmin_i32(&col_scores);
+        col_action = col_br;
 
-        let tf = t as f64;
-        let lower = min_col_score / tf;
-        let upper = max_row_score / tf;
+        let t_i = t as i32;
 
-        best_upper = best_upper.min(upper);
-        best_lower = best_lower.max(lower);
+        // upper_new/t_i  <  best_upper_score/best_upper_t
+        //   <=>  upper_new * best_upper_t  <  best_upper_score * t_i
+        // Both score and t fit i32; product fits i64.
+        if (max_row_score as i64) * (best_upper_t as i64)
+            < (best_upper_score as i64) * (t_i as i64)
+        {
+            best_upper_score = max_row_score;
+            best_upper_t = t_i;
+        }
+        if (min_col_score as i64) * (best_lower_t as i64)
+            > (best_lower_score as i64) * (t_i as i64)
+        {
+            best_lower_score = min_col_score;
+            best_lower_t = t_i;
+        }
 
-        if t % 100 == 0 && (best_upper - best_lower) < tol {
-            break;
+        if t % 100 == 0 {
+            // (best_upper_score/best_upper_t - best_lower_score/best_lower_t) < tol_q/SCALE
+            // Multiply by SCALE * best_upper_t * best_lower_t (positive):
+            //   SCALE * (best_upper_score*best_lower_t - best_lower_score*best_upper_t)
+            //     < tol_q * best_upper_t * best_lower_t
+            let diff = (best_upper_score as i64) * (best_lower_t as i64)
+                - (best_lower_score as i64) * (best_upper_t as i64);
+            let lhs = (SCALE as i64) * diff;
+            let rhs = (tol_q as i64) * (best_upper_t as i64) * (best_lower_t as i64);
+            if lhs < rhs {
+                break;
+            }
         }
     }
 
@@ -68,10 +92,23 @@ pub fn nash_fictitious_play(
     let row_probs: Vec<f64> = row_counts.iter().map(|&c| c as f64 / total_row as f64).collect();
     let col_probs: Vec<f64> = col_counts.iter().map(|&c| c as f64 / total_col as f64).collect();
 
-    // Value estimate: row's expected payoff against col's empirical mix
-    let value = (0..n).map(|i| (0..n).map(|j| row_probs[i] * col_probs[j] * payoff[i][j]).sum::<f64>()).sum();
+    let value = (0..n)
+        .map(|i| (0..n).map(|j| row_probs[i] * col_probs[j] * payoff[i][j]).sum::<f64>())
+        .sum();
 
     (row_probs, col_probs, value)
+}
+
+fn argmax_i32(v: &[i32]) -> (usize, i32) {
+    let mut bi = 0; let mut bv = v[0];
+    for (i, &x) in v.iter().enumerate().skip(1) { if x > bv { bv = x; bi = i; } }
+    (bi, bv)
+}
+
+fn argmin_i32(v: &[i32]) -> (usize, i32) {
+    let mut bi = 0; let mut bv = v[0];
+    for (i, &x) in v.iter().enumerate().skip(1) { if x < bv { bv = x; bi = i; } }
+    (bi, bv)
 }
 
 fn argmax(v: &[f64]) -> (usize, f64) {
@@ -195,15 +232,15 @@ fn test_solver_dominant_strategy() {
     // Col 2 dominates: always better for col player than Col 0 and Col 1
     // Nash equilibrium should be pure: Row 0, Col 0 with value 3.0
     let payoff = vec![
-        vec![3.0, 2.0, 1.0],  // Row 0
-        vec![2.0, 1.0, 0.0],  // Row 1
-        vec![1.0, 0.0, -1.0], // Row 2
+        vec![0.3, 0.2, 0.1],  // Row 0
+        vec![0.2, 0.1, 0.0],  // Row 1
+        vec![0.1, 0.0, -0.1], // Row 2
     ];
-    /* Viewed from column perspective:
+    /* Viewed from column perspective: (scaled by 10)
     let payoff = vec![
-        vec![-3.0, -2.0, -1.0],  // Row 0
-        vec![-2.0, -1.0,  0.0],  // Row 1
-        vec![-1.0,  0.0,  1.0], // Row 2
+        vec![-0.3, -0.2, -0.1],  // Row 0
+        vec![-0.2, -0.1, 0.0],  // Row 1
+        vec![-0.1, 0.0, 0.1], // Row 2
     ];
     So clearly move 2 dominates for the column player.
     */
@@ -216,7 +253,7 @@ fn test_solver_dominant_strategy() {
 
     assert!((row[0] - 1.0).abs() < 1e-2, "Row should play strategy 0 with prob 1");
     assert!((col[2] - 1.0).abs() < 1e-2, "Col should play strategy 2 with prob 1");
-    assert!((value - 1.0).abs() < 1e-2,  "Game value should be 3.0");
+    assert!((value - 0.1).abs() < 1e-2,  "Game value should be 0.1");
 }
 
 #[test]

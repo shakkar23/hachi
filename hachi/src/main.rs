@@ -4,7 +4,6 @@ use ort::{
     value::TensorRef,
 };
 
-mod search;
 mod eval;
 mod state;
 mod solver;
