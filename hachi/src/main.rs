@@ -4,9 +4,10 @@ use ort::{
     value::TensorRef,
 };
 
-mod bot;
+mod search;
 mod eval;
 mod state;
+mod solver;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut session = Session::builder()?

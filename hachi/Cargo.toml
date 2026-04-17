@@ -9,3 +9,13 @@ tetris = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
 ndarray = "0.15"
 features = { path = "../features" }
 anyhow = "1.0"
+minilp = "0.2.2"
+rand = { version = "0.8", features = ["small_rng"] }
+rand_distr = "0.4"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "nash_50x50"
+harness = false
