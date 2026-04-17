@@ -2,17 +2,17 @@ use tetris::board::Board;
 use crate::game::{GameState};
 
 fn get_heights(board: &Board) -> [u32; 10] {
-    let mut heights = board.heights();
+    let heights = board.heights();
 
     heights
 }
 
 fn get_height_differences(board: &Board) -> [i16; 9] {
-    let mut heights = board.heights();
+    let heights = board.heights();
     let mut diffs = [0; 9];
 
     for x in 0..9 {
-        diffs[x] = (heights[x+1] as i16 - heights[x] as i16);
+        diffs[x] = heights[x+1] as i16 - heights[x] as i16 ;
     }
 
     diffs
@@ -78,11 +78,11 @@ fn get_count_of_pieces(gamestate: &GameState) -> [i16; 7] {let queue = gamestate
 }
 
 // more complex, requires lookahead calculation
-fn get_maximum_combo(gamestate: &GameState) -> i16 {
+fn get_maximum_combo(_gamestate: &GameState) -> i16 {
     0
 }
 
-fn get_height_variance(board: &Board) -> f32 {
+fn get_height_variance(_board: &Board) -> f32 {
     0.0f32
 }
 
@@ -91,7 +91,7 @@ fn get_hold_or_current_piece(gamestate: &GameState) -> [i16; 7] {
     let mut onehot = [0;7];
 
     match gamestate.hold {
-        Some(value) => (onehot[value as usize] += 1),
+        Some(value) => onehot[value as usize] += 1 ,
         None => ()
     }
 
@@ -118,8 +118,8 @@ fn get_3x3s(board: &Board) -> ([i16; 512], [i16; 512], [i16; 512]) {
     let mut counts_with_y = [0; 512];
 
     // max encoding sizes
-    const x_cutoff:i16 = i16::MAX.ilog(8) as i16; // 5
-    const y_cutoff:i16 = i16::MAX.ilog(10) as i16; // 4
+    const X_CUTOFF:i16 = i16::MAX.ilog(8) as i16; // 5
+    const Y_CUTOFF:i16 = i16::MAX.ilog(10) as i16; // 4
 
     for y in (0..height).rev() {
         for x in 0..8 {
@@ -153,8 +153,8 @@ fn get_2x2s(board: &Board) -> ([i16; 16], [i16; 16], [i16; 16]) {
     let mut counts_with_y = [0; 16];
 
     // max encoding sizes
-    const x_cutoff:i16 = i16::MAX.ilog(9) as i16; // 5
-    const y_cutoff:i16 = i16::MAX.ilog(10) as i16; // 4
+    const X_CUTOFF:i16 = i16::MAX.ilog(9) as i16; // 5
+    const Y_CUTOFF:i16 = i16::MAX.ilog(10) as i16; // 4
 
     for y in (0..height).rev() {
         for x in 0..9 {
@@ -187,8 +187,8 @@ fn get_2x3s(board: &Board) -> ([i16; 64], [i16; 64], [i16; 64]) {
     let mut counts_with_y = [0; 64];
 
     // max encoding sizes
-    const x_cutoff:i16 = i16::MAX.ilog(9) as i16; // 5
-    const y_cutoff:i16 = i16::MAX.ilog(10) as i16; // 4
+    const X_CUTOFF:i16 = i16::MAX.ilog(9) as i16; // 5
+    const Y_CUTOFF:i16 = i16::MAX.ilog(10) as i16; // 4
 
     for y in (0..height).rev() {
         for x in 0..9 {
@@ -222,8 +222,8 @@ fn get_3x2s(board: &Board) -> ([i16; 64], [i16; 64], [i16; 64]) {
     let mut counts_with_y = [0; 64];
 
     // max encoding sizes
-    const x_cutoff:i16 = i16::MAX.ilog(9) as i16; // 5
-    const y_cutoff:i16 = i16::MAX.ilog(10) as i16; // 4
+    const X_CUTOFF:i16 = i16::MAX.ilog(9) as i16; // 5
+    const Y_CUTOFF:i16 = i16::MAX.ilog(10) as i16; // 4
 
     for y in (0..height).rev() {
         for x in 0..8 {
@@ -275,7 +275,7 @@ pub struct HachiFeatures {
 }
 
 pub fn get_hachi_features(gamestate: &GameState) -> HachiFeatures {
-    let mut board = gamestate.board;
+    let board = gamestate.board;
     let (all_3x3s, all_3x3s_with_x, all_3x3s_with_y) = get_3x3s(&board);
     let (all_2x2s, all_2x2s_with_x, all_2x2s_with_y) = get_2x2s(&board);
     let (all_2x3s, all_2x3s_with_x, all_2x3s_with_y) = get_2x3s(&board);

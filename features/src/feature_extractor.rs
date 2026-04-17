@@ -95,8 +95,8 @@ pub fn extract_features(game: &game::GameState) -> Features {
     }
 }
 
-const use_3x3s:bool = true;
-const use_positional_3x3s:bool = true;
+const USE_3X3S:bool = true;
+const USE_POSITIONAL_3X3S:bool = true;
 
 impl Features {
     pub fn sql_columns(prefix: &str) -> String {
@@ -151,14 +151,14 @@ impl Features {
             columns.push(format!("{}_{}{}{}", prefix, "next_onehot", i, type_suffix));
         }
         
-        if use_3x3s {
+        if USE_3X3S {
             // all_3x3s array
             for i in whitelist::top_100_3x3s.iter() {
                 columns.push(format!("{}_{}{}{}", prefix, "all_3x3s", i, type_suffix));
             }
         }
         
-        if use_positional_3x3s {
+        if USE_POSITIONAL_3X3S {
             // all_3x3s_with_x array
             for i in whitelist::top_100_3x3s_with_x.iter() {
                 columns.push(format!("{}_{}{}{}", prefix, "all_3x3s_with_x", i, type_suffix));
@@ -244,9 +244,9 @@ impl Features {
         7 +  // piece counts
         7 +  // hold or current
         7 +  // next
-        if use_3x3s {whitelist::top_100_3x3s.len()} else {0} +  // 3x3s
-        if use_positional_3x3s {whitelist::top_100_3x3s_with_x.len()} else {0} + // 3x3s with x
-        if use_positional_3x3s {whitelist::top_100_3x3s_with_y.len()} else {0} + // 3x3s with y
+        if USE_3X3S {whitelist::top_100_3x3s.len()} else {0} +  // 3x3s
+        if USE_POSITIONAL_3X3S {whitelist::top_100_3x3s_with_x.len()} else {0} + // 3x3s with x
+        if USE_POSITIONAL_3X3S {whitelist::top_100_3x3s_with_y.len()} else {0} + // 3x3s with y
         16 +  // 2x2s
         16 + // 2x2s with x
         16 + // 2x2s with y
@@ -315,14 +315,14 @@ impl Features {
             vals.push(no as i16);
         }
 
-        if use_3x3s {
+        if USE_3X3S {
             // 3x3s
             for i in whitelist::top_100_3x3s.iter() {
                 vals.push(self.all_3x3s[*i] as i16);
             }
         }
 
-        if use_positional_3x3s {
+        if USE_POSITIONAL_3X3S {
 
             // 3x3s with x
             for i in whitelist::top_100_3x3s_with_x.iter() {

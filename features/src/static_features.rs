@@ -1,7 +1,5 @@
 
 use tetris::board::Board;
-use tetris::moves::Move;
-use tetris::piece::{Piece,Rotation};
 
 use crate::game::{GameState};
 
@@ -78,7 +76,7 @@ pub fn sunbeam_holes(board: &Board, heights: &[u32; 10], well_x: usize) -> (i16,
     (holes as i16, min_height as i16)
 }
 
-pub fn sunbeam_donations(board: &mut Board, heights: &mut [u32; 10], depth: usize) -> ([i16; 4], i16) {
+pub fn sunbeam_donations(_board: &mut Board, _heights: &mut [u32; 10], _depth: usize) -> ([i16; 4], i16) {
     ([0i16;4], 0i16)
 }
 

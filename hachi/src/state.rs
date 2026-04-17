@@ -1,7 +1,4 @@
-use tetris::board::Board;
-use tetris::moves::Move;
-use tetris::piece::{Piece, Rotation};
-use tetris::movegen::{movegen};
+use tetris::piece::Piece;
 use tetris::state::{State};
 
 pub struct FullState {

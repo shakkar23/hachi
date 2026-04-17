@@ -1,4 +1,3 @@
-use tetris::board::Board;
 use tetris::moves::Move;
 use tetris::piece::{Piece, Rotation};
 use tetris::movegen::{movegen};
@@ -188,7 +187,7 @@ pub fn beam_search(
 
     // do beam search
 
-    for d in 0..depth {
+    for _d in 0..depth {
 
         // crunch beam width
         beam.select_nth_unstable_by_key(width - 1, |a| {
