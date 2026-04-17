@@ -1,56 +1,69 @@
 use minilp::{ComparisonOp, LinearExpr, OptimizationDirection, Problem};
 
-/// Solve zero-sum NxN game via fictitious play.
+/// Solve zero-sum NxN games approximately
 /// Returns (row_strategy, col_strategy, game_value).
 pub fn nash_equilibrium(payoff: &Vec<Vec<f64>>) -> (Vec<f64>, Vec<f64>, f64) {
-    nash_fictitious_play(payoff, 1000, 1e-1)
+    fictitious_play(payoff, 1 << 16, 5e-2)
 }
 
-pub fn nash_fictitious_play(
+pub fn fictitious_play(
     payoff: &Vec<Vec<f64>>,
     max_iters: usize,
     tol: f64,
 ) -> (Vec<f64>, Vec<f64>, f64) {
     let n = payoff.len();
     assert!(n > 0 && payoff.iter().all(|r| r.len() == n), "Must be NxN matrix");
-    assert!(max_iters <= (1 << 16), "max_iters must be <= 2^16");
 
-    const SCALE: i32 = (1 << 15) - 1; // 32767
+    // Flat row-major + transpose, both contiguous
+    let mut payoff_rm = vec![0.0f64; n * n];
+    let mut payoff_cm = vec![0.0f64; n * n]; // transpose: payoff_cm[j*n + i] = payoff[i][j]
+    for i in 0..n {
+        for j in 0..n {
+            payoff_rm[i * n + j] = payoff[i][j];
+            payoff_cm[j * n + i] = payoff[i][j];
+        }
+    }
 
-    let payoff_q: Vec<Vec<i32>> = payoff
-        .iter()
-        .map(|row| row.iter().map(|&v| (v.clamp(-1.0, 1.0) * SCALE as f64).round() as i32).collect())
-        .collect();
-
-    let mut row_scores = vec![0i32; n];
-    let mut col_scores = vec![0i32; n];
+    let mut row_scores = vec![0.0; n];
+    let mut col_scores = vec![0.0; n];
     let mut row_counts = vec![0u64; n];
     let mut col_counts = vec![0u64; n];
 
     let mut row_action = 0usize;
     let mut col_action = 0usize;
 
-    // Track tightest bounds in quantized score units (i.e. score, not score/t).
-    // best_upper_score / best_upper_t  is the tightest upper bound seen.
-    let mut best_upper_score: i32 = i32::MAX;
-    let mut best_upper_t: i32 = 1;
-    let mut best_lower_score: i32 = i32::MIN;
-    let mut best_lower_t: i32 = 1;
+    let mut best_upper = f64::INFINITY;
+    let mut best_lower = f64::NEG_INFINITY;
 
     for t in 1..=max_iters {
+        // Row player: add column `col_action` of payoff to row_scores.
+        // Column of row-major == row of transpose → contiguous slice.
         row_counts[row_action] += 1;
+        let col_slice = &payoff_cm[col_action * n..(col_action + 1) * n];
         for i in 0..n {
-            row_scores[i] += payoff_q[i][col_action];
+            row_scores[i] += col_slice[i];
         }
-        let (row_br, max_row_score) = argmax_i32(&row_scores);
-        row_action = row_br;
 
+        let (row_best_response, max_row_score) = argmax(&row_scores);
+        row_action = row_best_response;
+
+        // Column player: add row `row_action` of payoff to col_scores → already contiguous in row-major.
         col_counts[col_action] += 1;
+        let row_slice = &payoff_rm[row_action * n..(row_action + 1) * n];
         for j in 0..n {
-            col_scores[j] += payoff_q[row_action][j];
+            col_scores[j] += row_slice[j];
         }
-        let (col_br, min_col_score) = argmin_i32(&col_scores);
-        col_action = col_br;
+
+        let (column_best_response, min_col_score) = argmin(&col_scores);
+        col_action = column_best_response;
+
+        let tf = t as f64;
+        best_upper = best_upper.min(max_row_score / tf);
+        best_lower = best_lower.max(min_col_score / tf);
+
+        if t % 100 == 0 && (best_upper - best_lower) < tol {
+            break;
+        }
     }
 
     let total_row: u64 = row_counts.iter().sum();
@@ -59,43 +72,16 @@ pub fn nash_fictitious_play(
     let col_probs: Vec<f64> = col_counts.iter().map(|&c| c as f64 / total_col as f64).collect();
 
     let value = (0..n)
-        .map(|i| (0..n).map(|j| row_probs[i] * col_probs[j] * payoff[i][j]).sum::<f64>())
+        .map(|i| {
+            let row = &payoff_rm[i * n..(i + 1) * n];
+            (0..n).map(|j| row_probs[i] * col_probs[j] * row[j]).sum::<f64>()
+        })
         .sum();
 
     (row_probs, col_probs, value)
 }
 
-fn argmax_i32(v: &[i32]) -> (usize, i32) {
-    let mut bi = 0; let mut bv = v[0];
-    for (i, &x) in v.iter().enumerate().skip(1) { if x > bv { bv = x; bi = i; } }
-    (bi, bv)
-}
-
-fn argmin_i32(v: &[i32]) -> (usize, i32) {
-    let mut bi = 0; let mut bv = v[0];
-    for (i, &x) in v.iter().enumerate().skip(1) { if x < bv { bv = x; bi = i; } }
-    (bi, bv)
-}
-
-fn argmax(v: &[f64]) -> (usize, f64) {
-    let mut best = 0;
-    let mut best_val = v[0];
-    for (i, &x) in v.iter().enumerate().skip(1) {
-        if x > best_val { best = i; best_val = x; }
-    }
-    (best, best_val)
-}
-
-fn argmin(v: &[f64]) -> (usize, f64) {
-    let mut best = 0;
-    let mut best_val = v[0];
-    for (i, &x) in v.iter().enumerate().skip(1) {
-        if x < best_val { best = i; best_val = x; }
-    }
-    (best, best_val)
-}
-
-/// Solve for Nash equilibrium of a zero-sum NxN payoff matrix
+/// Solve for Nash equilibrium of a zero-sum NxN payoff matrix using LP
 /// Returns (row_strategy, col_strategy, game_value)
 pub fn nash_equilibrium_exact(payoff: &Vec<Vec<f64>>) -> (Vec<f64>, Vec<f64>, f64) {
     let n = payoff.len();
@@ -172,6 +158,74 @@ pub fn nash_equilibrium_exact(payoff: &Vec<Vec<f64>>) -> (Vec<f64>, Vec<f64>, f6
     (row_probs, col_probs, row_value)
 }
 
+#[inline]
+fn add_assign_i32(dst: &mut [i32], src: &[i32]) {
+    debug_assert_eq!(dst.len(), src.len());
+    for (d, &s) in dst.iter_mut().zip(src.iter()) {
+        *d = d.wrapping_add(s);
+    }
+}
+
+#[inline]
+fn argmax_i32(v: &[i32]) -> (usize, i32) {
+    let mut bi = 0;
+    let mut bv = v[0];
+    for (i, &x) in v.iter().enumerate().skip(1) {
+        if x > bv { bv = x; bi = i; }
+    }
+    (bi, bv)
+}
+
+#[inline]
+fn argmin_i32(v: &[i32]) -> (usize, i32) {
+    let mut bi = 0;
+    let mut bv = v[0];
+    for (i, &x) in v.iter().enumerate().skip(1) {
+        if x < bv { bv = x; bi = i; }
+    }
+    (bi, bv)
+}
+
+#[inline]
+fn argmax(v: &[f64]) -> (usize, f64) {
+    let mut best = 0;
+    let mut best_val = v[0];
+    for (i, &x) in v.iter().enumerate().skip(1) {
+        if x > best_val { best = i; best_val = x; }
+    }
+    (best, best_val)
+}
+
+#[inline]
+fn argmin(v: &[f64]) -> (usize, f64) {
+    let mut best = 0;
+    let mut best_val = v[0];
+    for (i, &x) in v.iter().enumerate().skip(1) {
+        if x < best_val { best = i; best_val = x; }
+    }
+    (best, best_val)
+}
+
+#[inline]
+fn argmax_f32(v: &[f32]) -> (usize, f32) {
+    let mut best = 0;
+    let mut best_val = v[0];
+    for (i, &x) in v.iter().enumerate().skip(1) {
+        if x > best_val { best = i; best_val = x; }
+    }
+    (best, best_val)
+}
+
+#[inline]
+fn argmin_f32(v: &[f32]) -> (usize, f32) {
+    let mut best = 0;
+    let mut best_val = v[0];
+    for (i, &x) in v.iter().enumerate().skip(1) {
+        if x < best_val { best = i; best_val = x; }
+    }
+    (best, best_val)
+}
+
 #[test]
 fn test_solver() {
     // RPS test case
@@ -199,14 +253,14 @@ fn test_solver_dominant_strategy() {
     // Nash equilibrium should be pure: Row 0, Col 0 with value 3.0
     let payoff = vec![
         vec![0.3, 0.2, 0.1],  // Row 0
-        vec![0.2, 0.1, 00.0],  // Row 1
+        vec![0.2, 0.1, 0.0],  // Row 1
         vec![0.1, 0.0, -0.1], // Row 2
     ];
     /* Viewed from column perspective:
     let payoff = vec![
-        vec![-3.0, -2.0, -1.0],  // Row 0
-        vec![-2.0, -1.0,  0.0],  // Row 1
-        vec![-1.0,  0.0,  1.0], // Row 2
+        vec![-0.3, -0.2, -0.1],  // Row 0
+        vec![-0.2, -0.1,  0.0],  // Row 1
+        vec![-0.1,  0.0,  0.1], // Row 2
     ];
     So clearly move 2 dominates for the column player.
     */
@@ -219,7 +273,7 @@ fn test_solver_dominant_strategy() {
 
     assert!((row[0] - 1.0).abs() < 1e-2, "Row should play strategy 0 with prob 1");
     assert!((col[2] - 1.0).abs() < 1e-2, "Col should play strategy 2 with prob 1");
-    assert!((value - 0.1).abs() < 1e-2,  "Game value should be 3.0");
+    assert!((value - 0.1).abs() < 1e-2,  "Game value should be 0.1");
 }
 
 #[test]
