@@ -1,8 +1,8 @@
 use tetris::piece::Piece;
-use tetris::state::{State};
+use features::game::{GameState};
 
 pub struct FullState {
-    pub state: State,
+    pub state: GameState,
     pub queue: [Piece;5]
 }
 

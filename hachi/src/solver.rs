@@ -3,7 +3,7 @@ use minilp::{ComparisonOp, LinearExpr, OptimizationDirection, Problem};
 /// Solve zero-sum NxN games approximately
 /// Returns (row_strategy, col_strategy, game_value).
 pub fn nash_equilibrium(payoff: &Vec<Vec<f64>>) -> (Vec<f64>, Vec<f64>, f64) {
-    fictitious_play(payoff, 1 << 16, 5e-2)
+    fictitious_play(payoff, 1 << 16, 1e-2)
 }
 
 pub fn fictitious_play(
@@ -159,34 +159,6 @@ pub fn nash_equilibrium_exact(payoff: &Vec<Vec<f64>>) -> (Vec<f64>, Vec<f64>, f6
 }
 
 #[inline]
-fn add_assign_i32(dst: &mut [i32], src: &[i32]) {
-    debug_assert_eq!(dst.len(), src.len());
-    for (d, &s) in dst.iter_mut().zip(src.iter()) {
-        *d = d.wrapping_add(s);
-    }
-}
-
-#[inline]
-fn argmax_i32(v: &[i32]) -> (usize, i32) {
-    let mut bi = 0;
-    let mut bv = v[0];
-    for (i, &x) in v.iter().enumerate().skip(1) {
-        if x > bv { bv = x; bi = i; }
-    }
-    (bi, bv)
-}
-
-#[inline]
-fn argmin_i32(v: &[i32]) -> (usize, i32) {
-    let mut bi = 0;
-    let mut bv = v[0];
-    for (i, &x) in v.iter().enumerate().skip(1) {
-        if x < bv { bv = x; bi = i; }
-    }
-    (bi, bv)
-}
-
-#[inline]
 fn argmax(v: &[f64]) -> (usize, f64) {
     let mut best = 0;
     let mut best_val = v[0];
@@ -198,26 +170,6 @@ fn argmax(v: &[f64]) -> (usize, f64) {
 
 #[inline]
 fn argmin(v: &[f64]) -> (usize, f64) {
-    let mut best = 0;
-    let mut best_val = v[0];
-    for (i, &x) in v.iter().enumerate().skip(1) {
-        if x < best_val { best = i; best_val = x; }
-    }
-    (best, best_val)
-}
-
-#[inline]
-fn argmax_f32(v: &[f32]) -> (usize, f32) {
-    let mut best = 0;
-    let mut best_val = v[0];
-    for (i, &x) in v.iter().enumerate().skip(1) {
-        if x > best_val { best = i; best_val = x; }
-    }
-    (best, best_val)
-}
-
-#[inline]
-fn argmin_f32(v: &[f32]) -> (usize, f32) {
     let mut best = 0;
     let mut best_val = v[0];
     for (i, &x) in v.iter().enumerate().skip(1) {
@@ -307,3 +259,4 @@ fn test_solver_rps5() {
     }
     assert!(value.abs() < 1e-2, "Game value should be 0.0, got {value:.6}");
 }
+
