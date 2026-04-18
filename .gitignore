@@ -12,6 +12,7 @@ catboost_info
 out.txt
 importances.txt
 Cargo.lock
+test.py
 
 # Added by cargo
 

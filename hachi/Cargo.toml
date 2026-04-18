@@ -6,12 +6,13 @@ edition = "2024"
 [dependencies]
 ort = "2.0.0-rc.10"
 tetris = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
+bot = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
 ndarray = "0.15"
 features = { path = "../features" }
 minilp = "0.2.2"
 rand = { version = "0.8", features = ["small_rng"] }
 rand_distr = "0.4"
-treerite  = { git = "https://github.com/dovahcrow/treerite" }
+lightgbm-rust = "0.1.1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -19,3 +20,6 @@ criterion = { version = "0.5", features = ["html_reports"] }
 [[bench]]
 name = "nash_NxN"
 harness = false
+
+[env]
+BINDGEN_EXTRA_CLANG_ARGS = "-std=c++17"

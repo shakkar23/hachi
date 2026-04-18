@@ -62,6 +62,7 @@ pub fn extract_features(game: &game::GameState) -> Features {
         piece_counts: hf.piece_counts,
         hold_or_current_onehot: hf.hold_or_current_onehot,
         next_onehot: hf.next_onehot,
+        
         all_3x3s: hf.all_3x3s,
         all_3x3s_with_x: hf.all_3x3s_with_x,
         all_3x3s_with_y: hf.all_3x3s_with_y,
@@ -77,6 +78,7 @@ pub fn extract_features(game: &game::GameState) -> Features {
         all_3x2s: hf.all_3x2s,
         all_3x2s_with_x: hf.all_3x2s_with_x,
         all_3x2s_with_y: hf.all_3x2s_with_y,
+
         meter: hf.meter,
         combo: hf.combo,
         b2b: hf.b2b,
