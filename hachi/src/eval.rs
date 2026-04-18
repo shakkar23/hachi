@@ -9,6 +9,8 @@ const MODEL_PATH: &str = "models/td_model.txt";
 const FEATURES_PER_ROW: usize = Features::count * 2;
 
 struct SyncBooster(Booster);
+// For predictions, booster should be threadsafe. 
+// We Send + Sync to handle the underlying raw pointer.
 unsafe impl Send for SyncBooster {}
 unsafe impl Sync for SyncBooster {}
 

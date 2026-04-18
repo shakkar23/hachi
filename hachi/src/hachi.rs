@@ -28,8 +28,8 @@ pub fn gamestate_to_state(gamestate: &GameState) -> State {
     State {
         board: gamestate.board,
         hold: gamestate.hold,
-        bag: Bag::all(),
-        next: 0,
+        bag: Bag::all(), // gamestate contains no bag information (yet).
+        next: 0, // queue always starts at current piece.
         b2b: gamestate.b2b,
         combo: gamestate.combo,
     }
@@ -39,12 +39,6 @@ fn solve_position(state: &MacroState) -> Move {
 
     let gamestate1: &GameState = &state.p1;
     let gamestate2: &GameState = &state.p2;
-
-    let board1:Board = state.p1.board;
-    let board2:Board = state.p2.board;
-
-    let piece1:Piece = state.p1.current_piece;
-    let piece2:Piece = state.p2.current_piece;
 
     let queue1 = state.p1.queue;
     let queue2 = state.p2.queue;
@@ -99,33 +93,19 @@ fn solve_position(state: &MacroState) -> Move {
         })
         .collect();
 
-    let n:usize = moves1.len().max(moves2.len());
+    let m:usize = moves1.len();
+    let n:usize = moves2.len();
 
     // Player 1 perspective
-    let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; n];
+    let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
 
-    for i in 0..n {
+    for i in 0..m {
         for j in 0..n {
-            if i >= moves1.len() {
-                // Player 1 has no move
-                payoffs[i][j] = -1.0;
-                continue;
-            }
-            if j >= moves2.len() {
-                // Player 2 has no move
-                payoffs[i][j] = 1.0;
-                continue;
-            }
-
             payoffs[i][j] = eval(&row_features[i], &col_features[j]);
         }
     }
 
-    let (mut row_strategy, col_strategy, game_value) = nash_equilibrium(&payoffs);
-
-    // remove padding moves
-
-    row_strategy.truncate(moves1.len());
+    let (mut row_strategy, _, _) = nash_equilibrium(&payoffs);
 
     // execute mixed strategy
 
@@ -150,10 +130,10 @@ fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
         Weights::default(),
         BotConfigs {
             width: 250,
-            depth: 5, // doesn't do anything
-            branch: 1, // doesn't do anything
+            depth: 3, // doesn't do anything yet
+            branch: 1, // doesn't do anything yet
         },
-        5,
+        3,
         n
     ).unwrap()
 }
@@ -169,6 +149,8 @@ pub fn sunbeam_top_n(
 ) -> Result<Vec<Move>, BotError> {
     // queue length needed to reach `depth`: depth + (1 if no hold).
     let needed = depth + root.hold.is_none() as usize;
+
+    assert!(needed <= 5, "depth exceeds queue");
 
     // The bot requires queue.len() >= 2.
     let queue_len = needed.max(2);
