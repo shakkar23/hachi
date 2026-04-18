@@ -1,4 +1,3 @@
-use tetris::piece::Piece;
 use features::game::{GameState};
 
 pub struct MacroState {

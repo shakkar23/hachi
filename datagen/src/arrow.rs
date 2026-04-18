@@ -17,7 +17,7 @@ pub fn rows_to_record_batch(rows: &[Row]) -> Result<RecordBatch, ArrowError> {
     let mut state_builder       = UInt16Builder::with_capacity(n_rows);
     let mut ground_truth_builder = Float32Builder::with_capacity(n_rows);
 
-    let n_feat = Features::count;
+    let n_feat = Features::COUNT;
 
     let mut feat0_builders: Vec<Int16Builder> = (0..n_feat)
         .map(|_| Int16Builder::with_capacity(n_rows))

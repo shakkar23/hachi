@@ -3,7 +3,7 @@ use minilp::{ComparisonOp, LinearExpr, OptimizationDirection, Problem};
 /// Solve zero-sum MxN games approximately
 /// Returns (row_strategy, col_strategy, game_value).
 pub fn nash_equilibrium(payoff: &Vec<Vec<f64>>) -> (Vec<f64>, Vec<f64>, f64) {
-    fictitious_play(payoff, 1 << 16, 1e-2)
+    fictitious_play(payoff, 1 << 16, 1e-3)
 }
 
 pub fn fictitious_play(

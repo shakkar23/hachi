@@ -39,3 +39,4 @@ def train():
 if __name__ == "__main__":
     train()
     bench(mini_model)
+    mini_model.save_model("models/mini_model.json", format="json")

@@ -2,7 +2,7 @@ use crate::state::MacroState;
 use features::game::GameState;
 
 use bot::{
-    bot::{BotConfigs, BotError, BotResult, BotScore, BotState},
+    bot::{BotConfigs, BotError, BotResult, BotState},
     eval::Weights,
 };
 
@@ -10,9 +10,7 @@ use tetris::{
     moves::Move,
     piece::Piece,
     state::{Lock, State},
-    movegen::movegen,
-    bag::Bag,
-    board::Board
+    bag::Bag
 };
 
 use rand::prelude::*;
@@ -21,7 +19,7 @@ use rand::distributions::WeightedIndex;
 use features::feature_extractor::Features;
 use features::feature_extractor::extract_features;
 
-use crate::eval::eval;
+use crate::eval::eval_batched;
 use crate::solver::nash_equilibrium;
 
 pub fn gamestate_to_state(gamestate: &GameState) -> State {
@@ -55,11 +53,12 @@ fn solve_position(state: &MacroState) -> Move {
         .iter()
         .map(|mv| {
             let mut s = state1.clone();
-            s.make(mv, &queue1);
+            let lock = s.make(mv, &queue1);
             let mut gs = gamestate1.clone();
             gs.board = s.board;
             gs.b2b = s.b2b;
             gs.combo = s.combo;
+            gs.attack = lock.sent;
             gs
         })
         .collect();
@@ -68,11 +67,12 @@ fn solve_position(state: &MacroState) -> Move {
         .iter()
         .map(|mv| {
             let mut s = state2.clone();
-            s.make(mv, &queue2);
+            let lock = s.make(mv, &queue2);
             let mut gs = gamestate2.clone();
             gs.board = s.board;
             gs.b2b = s.b2b;
             gs.combo = s.combo;
+            gs.attack = lock.sent;
             gs
         })
         .collect();
@@ -96,16 +96,25 @@ fn solve_position(state: &MacroState) -> Move {
     let m:usize = moves1.len();
     let n:usize = moves2.len();
 
-    // Player 1 perspective
-    let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
-
+    // create batch for eval
+    let mut pairs: Vec<(&Features, &Features)> = Vec::with_capacity(m * n);
     for i in 0..m {
         for j in 0..n {
-            payoffs[i][j] = eval(&row_features[i], &col_features[j]);
+            pairs.push((&row_features[i], &col_features[j]));
         }
     }
 
-    let (mut row_strategy, _, _) = nash_equilibrium(&payoffs);
+    let flat = eval_batched(&pairs);
+
+    // Player 1 perspective
+    let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
+    for i in 0..m {
+        for j in 0..n {
+            payoffs[i][j] = flat[i * n + j];
+        }
+    }
+
+    let (row_strategy, _, _) = nash_equilibrium(&payoffs);
 
     // execute mixed strategy
 
@@ -117,7 +126,7 @@ fn solve_position(state: &MacroState) -> Move {
     moves1[selected_index]
 }
 
-
+// Pruning essential to avoid payoff model going OOD.
 fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
     sunbeam_top_n(
         state.clone(),
@@ -130,10 +139,10 @@ fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
         Weights::default(),
         BotConfigs {
             width: 250,
-            depth: 3, // doesn't do anything yet
+            depth: 4, // doesn't do anything yet
             branch: 1, // doesn't do anything yet
         },
-        3,
+        4, // shallow. beam search has diminishing power at depth
         n
     ).unwrap()
 }
