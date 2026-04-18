@@ -5,8 +5,8 @@ edition = "2024"
 
 [dependencies]
 ort = "2.0.0-rc.10"
-tetris = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
-bot = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
+tetris = { git = "https://github.com/analog-hors/sunbeam", rev = "bcf64cd" }
+bot = { git = "https://github.com/analog-hors/sunbeam", rev = "bcf64cd" }
 ndarray = "0.15"
 features = { path = "../features" }
 minilp = "0.2.2"

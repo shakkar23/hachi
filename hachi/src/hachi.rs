@@ -1,11 +1,19 @@
 use crate::state::MacroState;
 use features::game::GameState;
-use tetris::board::Board;
-use tetris::state::State;
-use tetris::moves::Move;
-use tetris::piece::Piece;
-use tetris::bag::Bag;
-use tetris::movegen::movegen;
+
+use bot::{
+    bot::{BotConfigs, BotError, BotResult, BotScore, BotState},
+    eval::Weights,
+};
+
+use tetris::{
+    moves::Move,
+    piece::Piece,
+    state::{Lock, State},
+    movegen::movegen,
+    bag::Bag,
+    board::Board
+};
 
 use rand::prelude::*;
 use rand::distributions::WeightedIndex;
@@ -16,10 +24,21 @@ use features::feature_extractor::extract_features;
 use crate::eval::eval;
 use crate::solver::nash_equilibrium;
 
+pub fn gamestate_to_state(gamestate: &GameState) -> State {
+    State {
+        board: gamestate.board,
+        hold: gamestate.hold,
+        bag: Bag::all(),
+        next: 0,
+        b2b: gamestate.b2b,
+        combo: gamestate.combo,
+    }
+}
+
 fn solve_position(state: &MacroState) -> Move {
 
-    let mut gamestate1: GameState = state.p1.clone();
-    let mut gamestate2: GameState = state.p2.clone();
+    let gamestate1: &GameState = &state.p1;
+    let gamestate2: &GameState = &state.p2;
 
     let board1:Board = state.p1.board;
     let board2:Board = state.p2.board;
@@ -30,34 +49,11 @@ fn solve_position(state: &MacroState) -> Move {
     let queue1 = state.p1.queue;
     let queue2 = state.p2.queue;
 
+    let state1:State = gamestate_to_state(&gamestate1);
+    let state2:State = gamestate_to_state(&gamestate2);
 
-    let state1:State = State {
-        board: board1,
-        hold: gamestate1.hold,
-        bag: Bag::all(),
-        next: 0,
-        b2b: gamestate1.b2b,
-        combo: gamestate1.combo,
-    };
-
-    let state2:State = State {
-        board: board2,
-        hold: gamestate2.hold,
-        bag: Bag::all(),
-        next: 0,
-        b2b: gamestate2.b2b,
-        combo: gamestate2.combo,
-    };
-
-    let moves1 = movegen(&board1, piece1);
-    let moves2 = movegen(&board2, piece2);
-
-    // advance queues
-    // puts the current piece at the end of the queue
-    // no real reason. it's just faster than speculating or putting in a random piece
-
-    gamestate1.queue.rotate_left(1);
-    gamestate2.queue.rotate_left(1);
+    let moves1 = get_pruned_moves(&state1, &queue1, 16);
+    let moves2 = get_pruned_moves(&state2, &queue2, 16);
 
     // row states and column states, we join them later
 
@@ -125,7 +121,11 @@ fn solve_position(state: &MacroState) -> Move {
         }
     }
 
-    let (row_strategy, col_strategy, game_value) = nash_equilibrium_exact(&payoffs);
+    let (mut row_strategy, col_strategy, game_value) = nash_equilibrium(&payoffs);
+
+    // remove padding moves
+
+    row_strategy.truncate(moves1.len());
 
     // execute mixed strategy
 
@@ -135,4 +135,59 @@ fn solve_position(state: &MacroState) -> Move {
     let selected_index = dist.sample(&mut rng);
 
     moves1[selected_index]
+}
+
+
+fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
+    sunbeam_top_n(
+        state.clone(),
+        Lock {
+            cleared: 0,
+            sent: 0,
+            softdrop: false,
+        },
+        queue,
+        Weights::default(),
+        BotConfigs {
+            width: 250,
+            depth: 5, // doesn't do anything
+            branch: 1, // doesn't do anything
+        },
+        5,
+        n
+    ).unwrap()
+}
+
+pub fn sunbeam_top_n(
+    root: State,
+    lock: Lock,
+    full_queue: &[Piece],
+    weights: Weights,
+    configs: BotConfigs,
+    depth: usize,
+    n: usize,
+) -> Result<Vec<Move>, BotError> {
+    // queue length needed to reach `depth`: depth + (1 if no hold).
+    let needed = depth + root.hold.is_none() as usize;
+
+    // The bot requires queue.len() >= 2.
+    let queue_len = needed.max(2);
+
+    if full_queue.len() < queue_len {
+        return Err(BotError::InvalidQueue);
+    }
+
+    let queue: Vec<Piece> = full_queue[..queue_len].to_vec();
+    let bot = BotState::new(root, lock, queue, weights)?;
+    let result = bot.search(configs)?;
+
+    Ok(top_n(&result, n))
+}
+
+/// Sort candidates best-first and take the top `n`.
+pub fn top_n(result: &BotResult, n: usize) -> Vec<Move> {
+    let mut sorted = result.candidates.clone();
+    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.truncate(n);
+    sorted.into_iter().map(|(mv, _)| mv).collect()
 }
