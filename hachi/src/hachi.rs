@@ -1,5 +1,6 @@
 use crate::state::MacroState;
 use features::game::GameState;
+use std::cell::RefCell;
 
 use bot::{
     bot::{BotConfigs, BotError, BotResult, BotState},
@@ -20,7 +21,12 @@ use features::feature_extractor::Features;
 use features::feature_extractor::extract_features;
 
 use crate::eval::{eval_batched, ModelType};
-use crate::solver::nash_equilibrium;
+use crate::solver::{nash_equilibrium, nash_equilibrium_exact};
+use crate::table::{MoveTable, TableKey, TableValue};
+
+thread_local! {
+    static TTABLE: RefCell<MoveTable> = RefCell::new(MoveTable::new());
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct HachiConfig {
@@ -63,17 +69,6 @@ impl HachiConfig {
     }
 }
 
-
-pub fn gamestate_to_state(gamestate: &GameState) -> State {
-    State {
-        board: gamestate.board,
-        hold: gamestate.hold,
-        bag: Bag::all(), // gamestate contains no bag information (yet).
-        next: 0, // queue always starts at current piece.
-        b2b: gamestate.b2b,
-        combo: gamestate.combo,
-    }
-}
 
 // Solve a two-board position using subgame perfect equilibrium.
 // Returns: (best_move, win_probability)
@@ -145,11 +140,16 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
         }
     }
 
-    let mut flat: Vec<f64> = Vec::new();;
+    let mut flat: Vec<f64> = Vec::new();
 
-    if (depth == 1) {
+    if depth == 1 {
         flat = eval_batched(&pairs, config.model_type);
     } else {
+        /*
+            m + n work using transposition table
+            but table remains a hot path
+            option: compute moves matrix here and distribute
+        */
         for i in 0..m {
             for j in 0..n {
                 let (_, subgame_value) = solve_position(
@@ -171,7 +171,11 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
         }
     }
 
-    let (row_strategy, _, value) = nash_equilibrium(&payoffs);
+    let (row_strategy, _, value) = if config.use_exact {
+        nash_equilibrium_exact(&payoffs)
+    } else {
+        nash_equilibrium(&payoffs)
+    };
 
     // execute mixed strategy
 
@@ -185,20 +189,37 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
 
 // Pruning essential to avoid payoff model going OOD.
 pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
-    sunbeam_top_n(
-        state.clone(),
-        Lock {
-            cleared: 0,
-            sent: 0,
-            softdrop: false,
-        },
-        queue,
-        Weights::default(),
-        BotConfigs {
-            width: 250
-        },
-        n
-    ).unwrap()
+    let key = TableKey { 
+        state: state, 
+        piece: queue[0] 
+    };
+    TTABLE.with(|table| {
+        if let Some(entry) = table.borrow().get(&key) {
+            return entry.moves.clone();
+        } else {
+            let result = sunbeam_top_n(
+                state.clone(),
+                Lock {
+                    cleared: 0,
+                    sent: 0,
+                    softdrop: false,
+                },
+                queue,
+                Weights::default(),
+                BotConfigs {
+                    width: 250
+                },
+                n
+            ).unwrap();
+            table.borrow_mut().put(
+                &key,
+                TableValue{ 
+                   moves: result.clone()
+                }
+            );
+            return result;
+        }
+    })
 }
 
 pub fn sunbeam_top_n(
@@ -222,4 +243,15 @@ pub fn top_n(result: &BotResult, n: usize) -> Vec<Move> {
     sorted.sort_by(|a, b| b.1.cmp(&a.1));
     sorted.truncate(n);
     sorted.into_iter().map(|(mv, _)| mv).collect()
+}
+
+pub fn gamestate_to_state(gamestate: &GameState) -> State {
+    State {
+        board: gamestate.board,
+        hold: gamestate.hold,
+        bag: Bag::all(), // gamestate contains no bag information (yet).
+        next: 0, // queue always starts at current piece.
+        b2b: gamestate.b2b,
+        combo: gamestate.combo,
+    }
 }
