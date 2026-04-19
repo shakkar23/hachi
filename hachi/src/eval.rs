@@ -1,4 +1,12 @@
 use features::feature_extractor::Features;
+
+#[derive(Debug, Clone, Copy)]
+pub enum ModelType {
+    LightGBM_Large,
+    CatBoost_Small
+}
+
+/*
 use lightgbm_rust::{predict_type, Booster};
 use std::cell::RefCell;
 
@@ -45,4 +53,13 @@ pub fn eval_batched(pairs: &[(&Features, &Features)]) -> Vec<f64> {
             .predict(&data, num_rows as i32, FEATURES_PER_ROW as i32, predict_type::NORMAL)
             .expect("lightgbm prediction failed")
     })
+}
+*/
+
+pub fn eval(f1: &Features, f2: &Features, config: ModelType) -> f64 {
+    eval_batched(&[(f1, f2)], config)[0]
+}
+
+pub fn eval_batched(pairs: &[(&Features, &Features)], config: ModelType) -> Vec<f64> {
+    Vec::new()
 }

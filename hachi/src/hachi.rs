@@ -19,8 +19,50 @@ use rand::distributions::WeightedIndex;
 use features::feature_extractor::Features;
 use features::feature_extractor::extract_features;
 
-use crate::eval::eval_batched;
+use crate::eval::{eval_batched, ModelType};
 use crate::solver::nash_equilibrium;
+
+#[derive(Debug, Clone, Copy)]
+pub struct HachiConfig {
+    pub max_moves: usize,
+    pub max_responses: usize,
+    pub use_exact: bool,
+    pub model_type: ModelType
+}
+
+/*
+    `max_moves`: Number of moves to consider for playing side.
+    `max_responses`: Number of moves to consider for opponent side.
+    `use_exact`: `true` to solve equilibriums exactly, or `false` to approximate.
+    `model_type`: Model to use for evaluation at leaf positions.
+
+    Smaller values for `max_moves` and `max_responses` result
+    in more time spent on beam search. Larger values result in
+    more time spent evaluating the payoff model.
+*/
+
+impl Default for HachiConfig {
+    fn default() -> Self {
+        Self {
+            max_moves: 8,
+            max_responses: 8,
+            use_exact: false,
+            model_type: ModelType::LightGBM_Large
+        }
+    }
+}
+
+impl HachiConfig {
+    fn rapid() -> Self {
+        Self {
+            max_moves: 4,
+            max_responses: 4,
+            use_exact: true,
+            model_type: ModelType::CatBoost_Small
+        }
+    }
+}
+
 
 pub fn gamestate_to_state(gamestate: &GameState) -> State {
     State {
@@ -33,19 +75,18 @@ pub fn gamestate_to_state(gamestate: &GameState) -> State {
     }
 }
 
-fn solve_position(state: &MacroState) -> Move {
+// Solve a two-board position using subgame perfect equilibrium.
+// Returns: (best_move, win_probability)
+pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usize, config: HachiConfig) -> (Move, f64) {
 
-    let gamestate1: &GameState = &state.p1;
-    let gamestate2: &GameState = &state.p2;
-
-    let queue1 = state.p1.queue;
-    let queue2 = state.p2.queue;
+    let queue1 = gamestate1.queue;
+    let queue2 = gamestate2.queue;
 
     let state1:State = gamestate_to_state(&gamestate1);
     let state2:State = gamestate_to_state(&gamestate2);
 
-    let moves1 = get_pruned_moves(&state1, &queue1, 16);
-    let moves2 = get_pruned_moves(&state2, &queue2, 16);
+    let moves1 = get_pruned_moves(&state1, &queue1, config.max_moves);
+    let moves2 = get_pruned_moves(&state2, &queue2, config.max_responses);
 
     // row states and column states, we join them later
 
@@ -104,7 +145,23 @@ fn solve_position(state: &MacroState) -> Move {
         }
     }
 
-    let flat = eval_batched(&pairs);
+    let mut flat: Vec<f64> = Vec::new();;
+
+    if (depth == 1) {
+        flat = eval_batched(&pairs, config.model_type);
+    } else {
+        for i in 0..m {
+            for j in 0..n {
+                let (_, subgame_value) = solve_position(
+                    &row_states[i],
+                    &column_states[j],
+                    depth - 1,
+                    config
+                );
+                flat.push(subgame_value);
+            }
+        }
+    }
 
     // Player 1 perspective
     let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
@@ -114,7 +171,7 @@ fn solve_position(state: &MacroState) -> Move {
         }
     }
 
-    let (row_strategy, _, _) = nash_equilibrium(&payoffs);
+    let (row_strategy, _, value) = nash_equilibrium(&payoffs);
 
     // execute mixed strategy
 
@@ -123,11 +180,11 @@ fn solve_position(state: &MacroState) -> Move {
 
     let selected_index = dist.sample(&mut rng);
 
-    moves1[selected_index]
+    (moves1[selected_index], value)
 }
 
 // Pruning essential to avoid payoff model going OOD.
-fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
+pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
     sunbeam_top_n(
         state.clone(),
         Lock {
@@ -138,11 +195,8 @@ fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
         queue,
         Weights::default(),
         BotConfigs {
-            width: 250,
-            depth: 4, // doesn't do anything yet
-            branch: 1, // doesn't do anything yet
+            width: 250
         },
-        4, // shallow. beam search has diminishing power at depth
         n
     ).unwrap()
 }
@@ -153,24 +207,11 @@ pub fn sunbeam_top_n(
     full_queue: &[Piece],
     weights: Weights,
     configs: BotConfigs,
-    depth: usize,
     n: usize,
 ) -> Result<Vec<Move>, BotError> {
-    // queue length needed to reach `depth`: depth + (1 if no hold).
-    let needed = depth + root.hold.is_none() as usize;
-
-    assert!(needed <= 5, "depth exceeds queue");
-
-    // The bot requires queue.len() >= 2.
-    let queue_len = needed.max(2);
-
-    if full_queue.len() < queue_len {
-        return Err(BotError::InvalidQueue);
-    }
-
-    let queue: Vec<Piece> = full_queue[..queue_len].to_vec();
+    let queue: Vec<Piece> = full_queue[..5].to_vec();
     let bot = BotState::new(root, lock, queue, weights)?;
-    let result = bot.search(configs)?;
+    let result = bot.search_to_n(n, configs)?;
 
     Ok(top_n(&result, n))
 }
