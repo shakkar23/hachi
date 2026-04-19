@@ -5,8 +5,8 @@ edition = "2024"
 build = "build.rs"
 
 [dependencies]
-tetris = { git = "https://github.com/nightcrab/sunbeam" }
-bot = { git = "https://github.com/nightcrab/sunbeam" }
+tetris = { git = "https://github.com/nightcrab/sunbeam", rev = "b25cfa4"}
+bot = { git = "https://github.com/nightcrab/sunbeam", rev = "b25cfa4" }
 features = { path = "../features" }
 minilp = "0.2.2"
 rand = { version = "0.8", features = ["small_rng"] }

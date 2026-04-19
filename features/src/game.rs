@@ -1,6 +1,6 @@
 use tetris::{board::Board, piece::Piece, piece::Rotation};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Move {
     pub move_type:Option<Piece>,
     pub rotation:Rotation,
@@ -8,7 +8,7 @@ pub struct Move {
     pub y:u8,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GameState {
     pub board: Board,
     pub current_piece:Piece,
@@ -21,6 +21,24 @@ pub struct GameState {
     pub spun:bool,
     pub queue:[Piece;5],
     pub hold:Option<Piece>
+}
+
+impl GameState {
+    pub fn tank_garbage(self, amount:u32) -> Option<[GameState; 10]> {
+        if amount == 0 {
+            return None;
+        }
+
+        let mut copies: [GameState;10] = [self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone()];
+        for x in 0..10 {
+            for i in 0..10 {
+                copies[x].board.cols[i] <<= amount as u64;
+                let should_fill = x == i;
+                copies[x].board.cols[i] |= if should_fill {(1 << amount) - 1} else {0};
+            }
+        }
+        return Some(copies);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]

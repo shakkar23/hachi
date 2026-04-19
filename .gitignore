@@ -17,3 +17,5 @@ test.py
 # Added by cargo
 
 /target
+lib_lightgbm.so
+liblib_lightgbm.so

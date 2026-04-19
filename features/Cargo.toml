@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tetris = { git = "https://github.com/citrus610/sunbeam", rev = "bcf64cd" }
+tetris = { git = "https://github.com/nightcrab/sunbeam", rev = "b25cfa4" }
 struct_iterable = "0.1.1"
 itertools = "0.12"

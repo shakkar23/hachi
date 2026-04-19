@@ -2,7 +2,7 @@ use crate::hachi_features;
 use crate::game;
 use crate::static_features;
 use crate::whitelist;
-
+#[derive(Clone)]
 pub struct Features {
     pub heights:[u32;10],
     pub height_differences:[i16;9],

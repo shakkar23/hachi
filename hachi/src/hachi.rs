@@ -1,4 +1,3 @@
-use crate::state::MacroState;
 use features::game::GameState;
 use std::cell::RefCell;
 
@@ -70,6 +69,11 @@ impl HachiConfig {
     }
 }
 
+#[derive(PartialEq, Eq)]
+enum StateState {
+    One(GameState),
+    Ten([GameState;10])
+}
 
 // Solve a two-board position using subgame perfect equilibrium.
 // Returns: (best_move, win_probability)
@@ -87,7 +91,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
 
     // row states and column states, we join them later
 
-    let row_states: Vec<GameState> = moves1
+    let row_states: Vec<StateState> = moves1
         .iter()
         .map(|mv| {
             let mut s = state1.clone();
@@ -96,12 +100,20 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
             gs.board = s.board;
             gs.b2b = s.b2b;
             gs.combo = s.combo;
-            gs.attack = lock.sent;
-            gs
+
+            let next_meter = gs.meter.saturating_sub(lock.sent);
+            gs.attack = lock.sent - gs.meter.abs_diff(next_meter);
+            gs.meter = next_meter;
+            if lock.cleared == 0 {
+                let next_states = gs.tank_garbage(gs.meter as u32);
+                if let Some(actual_next_states) = next_states {
+                    return StateState::Ten(actual_next_states);
+                }
+            }
+            StateState::One(gs)
         })
         .collect();
-
-    let column_states: Vec<GameState> = moves2
+    let column_states: Vec<StateState> = moves2
         .iter()
         .map(|mv| {
             let mut s = state2.clone();
@@ -110,39 +122,98 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
             gs.board = s.board;
             gs.b2b = s.b2b;
             gs.combo = s.combo;
-            gs.attack = lock.sent;
-            gs
+
+            let next_meter = gs.meter.saturating_sub(lock.sent);
+            gs.attack = lock.sent - gs.meter.abs_diff(next_meter);
+            gs.meter = next_meter;
+            if lock.cleared == 0 {
+                let next_states = gs.tank_garbage(gs.meter as u32);
+                if let Some(actual_next_states) = next_states {
+                    return StateState::Ten(actual_next_states);
+                }
+            }
+            StateState::One(gs)
         })
         .collect();
 
     // calculate features along axes once and join later
-
-    let row_features: Vec<Features> = row_states
+    
+    let row_features: Vec<Vec<Features>> = row_states
         .iter()
         .map(|state| {
-            extract_features(state)
+            if let StateState::One(one) = state {
+                return vec![extract_features(one)];
+            }
+            if let StateState::Ten(ten) = state {
+                return ten.clone().map(|one_of_ten|{extract_features(&one_of_ten)}).to_vec();
+            }
+            unreachable!();
         })
         .collect();
 
-    let col_features: Vec<Features> = column_states
+    let col_features: Vec<Vec<Features>> = column_states
         .iter()
         .map(|state| {
-            extract_features(state)
+            if let StateState::One(one) = state {
+                return vec![extract_features(one)];
+            }
+            if let StateState::Ten(ten) = state {
+                return ten.clone().map(|one_of_ten|{extract_features(&one_of_ten)}).to_vec();
+            }
+            unreachable!();
         })
         .collect();
 
     let m:usize = moves1.len();
     let n:usize = moves2.len();
 
-    // create batch for eval
-    let mut pairs: Vec<(&Features, &Features)> = Vec::with_capacity(m * n);
+    // the grid looks like this
+    // -----------------------
+    // |          |----------|
+    // |   one    |----------|
+    // |  state   |----------|
+    // |          |----------|
+    // -----------------------
+    // |  | | | | |  | | | | |
+    // |  | | | | |  | | | | |
+    // |  | | | | |----------|
+    // |  | | | | |  | | | | |
+    // -----------------------
+    let mut move_payoffs:Vec<Vec<f64>> = Vec::with_capacity(m);
+
     for i in 0..m {
+        move_payoffs.push(Vec::with_capacity(n));
         for j in 0..n {
-            pairs.push((&row_features[i], &col_features[j]));
+            // calculate one payoff
+            // averages the move_payoffs evenly because garbage is evenly dispursed, and theres no action after this point
+            let m2 = row_features[n].len();
+            let mut pairs:Vec<(&Features, &Features)>= Vec::with_capacity(10*10);
+            for ii in 0..m2 {
+                let n2 = col_features[n].len();
+                for jj in 0..n2 {
+                    pairs.push((&row_features[i][ii], &col_features[j][jj]));
+                }
+            }
+            let flat = eval_batched(&pairs, config.model_type);
+            let sum: f64 = flat.iter().sum();
+            let count = flat.len() as f64;
+
+            let average = if count > 0.0 { sum / count } else { 0.0 };
+            move_payoffs[i].push(average);
         }
     }
+    
+    // create batch for eval
+    // let mut pairs: Vec<(&Features, &Features)> = Vec::with_capacity(m * n);
+    // for i in 0..m {
+    //     for j in 0..n {
+    //         pairs.push((&row_features[i], &col_features[j]));
+    //     }
+    // }
 
-    let mut flat: Vec<f64> = Vec::new();
+    //let flat = eval_batched(&pairs);
+
+    //let mut flat: Vec<f64> = Vec::new();
 
     if depth == 1 {
         // awyzza: 100 microseconds using catboost small
@@ -150,7 +221,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
         // awyzza: but note this runs 64 times at depth 2
         // awyzza: so it's still like 100-200ms total
         // awyzza: or 5-10ms using cb_s
-        flat = eval_batched(&pairs, config.model_type);
+        //flat = eval_batched(&pairs, config.model_type);
     } else {
         /*
             O((m+n)*beam_search_cost + m*n*eval_cost)
@@ -163,33 +234,55 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
         // awyzza: this loop costs about 200ms at depth = 2
         // awyzza: also, cousins can share moves too.
         // awyzza: you would still need the table for that.
+        let mut flat:Vec<f64> = Vec::new();
         for i in 0..m {
+            let mut subgame_values = Vec::new();
             for j in 0..n {
-                let (_, subgame_value) = solve_position(
-                    &row_states[i],
-                    &column_states[j],
-                    depth - 1,
-                    config
-                );
-                flat.push(subgame_value);
+                let m_is_one = matches!(row_states[i], StateState::One(_));
+                let m2 = if m_is_one {1} else {10};
+                for ii in 0..m2 {
+                    let n_is_one = matches!(column_states[j], StateState::One(_));
+
+                    let m1_state = match row_states[i] {
+                            StateState::One(s) => s,
+                            StateState::Ten(t) => t[ii]
+                        };
+
+                    let n2 = if m_is_one {1} else {10};
+                    for jj in 0..n2 {
+                        
+                        let n1_state = match column_states[j] {
+                                StateState::One(s) => s,
+                                StateState::Ten(t) => t[jj]
+                            };
+                        let (_, subgame_value) = solve_position(
+                            &m1_state,
+                            &n1_state,
+                            depth - 1,
+                            config
+                        );
+                        subgame_values.push(subgame_value);
+                    }
+                }
+                flat.push(subgame_values.iter().sum::<f64>() / subgame_values.len() as f64);
             }
         }
     }
 
     // Player 1 perspective
-    let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
-    for i in 0..m {
-        for j in 0..n {
-            payoffs[i][j] = flat[i * n + j];
-        }
-    }
+    // let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
+    // for i in 0..m {
+    //     for j in 0..n {
+    //         payoffs[i][j] = flat[i * n + j];
+    //     }
+    // }
 
     // calculate best strategy and win expectation
 
     let (row_strategy, _, value) = if config.use_exact {
-        nash_equilibrium_exact(&payoffs) // awyzza: 200 microseconds.
+        nash_equilibrium_exact(&move_payoffs) // awyzza: 200 microseconds.
     } else {
-        nash_equilibrium(&payoffs) // awyzza: 20 microseconds.
+        nash_equilibrium(&move_payoffs) // awyzza: 20 microseconds.
     };
 
     // execute mixed strategy
