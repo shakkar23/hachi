@@ -208,7 +208,7 @@ fn test_solver() {
 
     assert!((row[0] - 0.33).abs() < 1e-1, "Rock should have probability 1/3");
     assert!((col[0] - 0.33).abs() < 1e-1, "Paper should have probability 1/3");
-    assert!((value - 0.0).abs() < PRECISION*2,  "Game should be symmetric");
+    assert!((value - 0.0).abs() < PRECISION*2.0,  "Game should be symmetric");
 }
 
 #[test]
@@ -228,9 +228,9 @@ fn test_solver_dominant_strategy() {
     println!("Column strategy: {:?}", col.iter().map(|x| format!("{:.4}", x)).collect::<Vec<_>>());
     println!("Game value:      {:.6}", value);
 
-    assert!((row[0] - 1.0).abs() < PRECISION*2, "Row should play strategy 0 with prob 1");
-    assert!((col[2] - 1.0).abs() < PRECISION*2, "Col should play strategy 2 with prob 1");
-    assert!((value - 0.1).abs() < PRECISION*2,  "Game value should be 0.1");
+    assert!((row[0] - 1.0).abs() < PRECISION*2.0, "Row should play strategy 0 with prob 1");
+    assert!((col[2] - 1.0).abs() < PRECISION*2.0, "Col should play strategy 2 with prob 1");
+    assert!((value - 0.1).abs() < PRECISION*2.0,  "Game value should be 0.1");
 }
 
 #[test]
@@ -248,12 +248,12 @@ fn test_solver_rps5() {
     let (row, col, value) = nash_equilibrium(&payoff);
 
     for (i, &p) in row.iter().enumerate() {
-        assert!((p - 0.2).abs() < PRECISION*2, "Row strategy {i} should be 0.2, got {p:.6}");
+        assert!((p - 0.2).abs() < PRECISION*2.0, "Row strategy {i} should be 0.2, got {p:.6}");
     }
     for (i, &p) in col.iter().enumerate() {
-        assert!((p - 0.2).abs() < PRECISION*2, "Col strategy {i} should be 0.2, got {p:.6}");
+        assert!((p - 0.2).abs() < PRECISION*2.0, "Col strategy {i} should be 0.2, got {p:.6}");
     }
-    assert!(value.abs() < PRECISION*2, "Game value should be 0.0, got {value:.6}");
+    assert!(value.abs() < PRECISION*2.0, "Game value should be 0.0, got {value:.6}");
 }
 
 #[test]
@@ -273,11 +273,11 @@ fn test_non_square_tall() {
     assert_eq!(row.len(), 4);
     assert_eq!(col.len(), 2);
     // Row 3 is strictly dominated — should have ~0 probability.
-    assert!(row[3] < PRECISION*2, "Dominated row should have near-zero probability, got {}", row[3]);
+    assert!(row[3] < PRECISION*2.0, "Dominated row should have near-zero probability, got {}", row[3]);
     // Column play must be ~uniform on the two columns.
-    assert!((col[0] - 0.5).abs() < PRECISION*2);
-    assert!((col[1] - 0.5).abs() < PRECISION*2);
-    assert!(value.abs() < PRECISION*2);
+    assert!((col[0] - 0.5).abs() < PRECISION*2.0);
+    assert!((col[1] - 0.5).abs() < PRECISION*2.0);
+    assert!(value.abs() < PRECISION*2.0);
 }
 
 #[test]
@@ -295,10 +295,10 @@ fn test_non_square_wide() {
     assert_eq!(row.len(), 2);
     assert_eq!(col.len(), 4);
     // Column 3 is strictly dominated for the column player.
-    assert!(col[3] < PRECISION*2, "Dominated column should have near-zero probability, got {}", col[3]);
-    assert!((row[0] - 0.5).abs() < PRECISION*2);
-    assert!((row[1] - 0.5).abs() < PRECISION*2);
-    assert!(value.abs() < PRECISION*2);
+    assert!(col[3] < PRECISION*2.0, "Dominated column should have near-zero probability, got {}", col[3]);
+    assert!((row[0] - 0.5).abs() < PRECISION*2.0);
+    assert!((row[1] - 0.5).abs() < PRECISION*2.0);
+    assert!(value.abs() < PRECISION*2.0);
 }
 
 #[test]

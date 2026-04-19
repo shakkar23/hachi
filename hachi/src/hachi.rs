@@ -59,11 +59,12 @@ impl Default for HachiConfig {
 }
 
 impl HachiConfig {
+    // if compute constrained, try this
     fn rapid() -> Self {
         Self {
             max_moves: 4,
             max_responses: 4,
-            use_exact: true,
+            use_exact: false,
             model_type: ModelType::CatBoost_Small
         }
     }
@@ -80,6 +81,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     let state1:State = gamestate_to_state(&gamestate1);
     let state2:State = gamestate_to_state(&gamestate2);
 
+    // awyzza: 20ms here
     let moves1 = get_pruned_moves(&state1, &queue1, config.max_moves);
     let moves2 = get_pruned_moves(&state2, &queue2, config.max_responses);
 
@@ -143,13 +145,24 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     let mut flat: Vec<f64> = Vec::new();
 
     if depth == 1 {
+        // awyzza: 100 microseconds using catboost small
+        // awyzza: 2 ms using lightgbm large
+        // awyzza: but note this runs 64 times at depth 2
+        // awyzza: so it's still like 100-200ms total
+        // awyzza: or 5-10ms using cb_s
         flat = eval_batched(&pairs, config.model_type);
     } else {
         /*
-            m + n work using transposition table
-            but table remains a hot path
-            option: compute moves matrix here and distribute
+            O((m+n)*beam_search_cost + m*n*eval_cost)
+            in principle, row/column siblings have the same
+            movesets which they read from the table.
+            note: table hot path could be bypassed altogether
+            by computing values here and then passing them into
+            each `solve_position` call. may reduce overhead
         */
+        // awyzza: this loop costs about 200ms at depth = 2
+        // awyzza: also, cousins can share moves too.
+        // awyzza: you would still need the table for that.
         for i in 0..m {
             for j in 0..n {
                 let (_, subgame_value) = solve_position(
@@ -171,10 +184,12 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
         }
     }
 
+    // calculate best strategy and win expectation
+
     let (row_strategy, _, value) = if config.use_exact {
-        nash_equilibrium_exact(&payoffs)
+        nash_equilibrium_exact(&payoffs) // awyzza: 200 microseconds.
     } else {
-        nash_equilibrium(&payoffs)
+        nash_equilibrium(&payoffs) // awyzza: 20 microseconds.
     };
 
     // execute mixed strategy
@@ -197,6 +212,7 @@ pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move>
         if let Some(entry) = table.borrow().get(&key) {
             return entry.moves.clone();
         } else {
+            // awyzza: 10ms per call here
             let result = sunbeam_top_n(
                 state.clone(),
                 Lock {
@@ -207,7 +223,7 @@ pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move>
                 queue,
                 Weights::default(),
                 BotConfigs {
-                    width: 250
+                    width: 75
                 },
                 n
             ).unwrap();
@@ -249,7 +265,7 @@ pub fn gamestate_to_state(gamestate: &GameState) -> State {
     State {
         board: gamestate.board,
         hold: gamestate.hold,
-        bag: Bag::all(), // gamestate contains no bag information (yet).
+        bag: Bag::all(), // doesn't matter because queue is always full.
         next: 0, // queue always starts at current piece.
         b2b: gamestate.b2b,
         combo: gamestate.combo,

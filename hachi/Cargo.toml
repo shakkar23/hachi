@@ -19,5 +19,9 @@ criterion = { version = "0.5", features = ["html_reports"] }
 name = "nash_NxN"
 harness = false
 
+[[bench]]
+name = "beam"
+harness = false
+
 [env]
 BINDGEN_EXTRA_CLANG_ARGS = "-std=c++17"
