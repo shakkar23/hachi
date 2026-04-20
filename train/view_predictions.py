@@ -2,7 +2,8 @@ import sqlite3
 import duckdb
 import numpy as np
 import pandas as pd
-from model import big_model as xgb_model
+from model import big_model as lgb_model
+import lightgbm as lgb
 
 states = None
 def get_feature_data():
@@ -120,7 +121,7 @@ def print_boards_side_by_side(board1, board2, prediction):
 
 def view_predictions():
     # Load the model
-    xgb_model.load_model("models/td_model.ubj")
+    lgb_model = lgb.Booster(model_file='models/td_model.txt')
     
     # Get feature data for predictions
     fdf = get_feature_data()
@@ -129,7 +130,7 @@ def view_predictions():
     rdf = get_raw_data()
     
     # Make predictions
-    fdf['prediction'] = xgb_model.predict(fdf)
+    fdf['prediction'] = lgb_model.predict(fdf)
     
     # Step through each game state
     for idx in range(len(fdf)):
@@ -159,14 +160,14 @@ def view_predictions():
 def view_predictions_simple():
     """Alternative version that just prints boards and predictions sequentially"""
     # Load the model
-    xgb_model.load("models/td_model.ubj")
+    lgb_model.load("models/td_model.ubj")
     
     # Get data
     fdf = get_feature_data()
     rdf = get_raw_data()
     
     # Make predictions
-    fdf['prediction'] = xgb_model.predict(fdf)
+    fdf['prediction'] = lgb_model.predict(fdf)
     
     # Display each game state
     for idx in range(min(len(fdf), len(rdf))):
