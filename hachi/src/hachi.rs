@@ -77,7 +77,7 @@ pub struct ChanceState {
 
 // Solve a two-board position using subgame perfect equilibrium.
 // Returns: (best_move, win_probability)
-pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usize, config: HachiConfig) -> (Move, f64) {
+pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, depth: usize, config: HachiConfig) -> (Move, f64) {
 
     let queue1 = gamestate1.queue;
     let queue2 = gamestate2.queue;
@@ -89,7 +89,8 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     let moves1 = get_pruned_moves(&state1, &queue1, config.max_moves);
     let moves2 = get_pruned_moves(&state2, &queue2, config.max_responses);
 
-    // row states and column states, we join them later
+    gamestate1.attack = 0;
+    gamestate2.attack = 0;
 
     let make_state = |mv: &Move, state: &State, queue: &[Piece;5], gamestate: &GameState| {
         let mut s = state.clone();
@@ -154,7 +155,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     
     /*
         Subgame solving complexity:
-        O(((m+n)*beam_search_cost)^depth + (m*n*eval_cost)^depth)
+        O(((m^depth + n^depth)*beam_search_cost) + (m*n*eval_cost)^depth)
     */
     
     // calculate payoffs
@@ -166,6 +167,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
             // it's impossible for both players to tank garbage at the same time
             // (no passthrough)
 
+            // handle chance node
             let get_average_payoff = |
                 chance_state: &ChanceState, 
                 opponent_index: usize, 
@@ -176,9 +178,12 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
                     |k| {
                         let mut gs = chance_state.gamestate.clone();
                         gs.tank_garbage(chance_state.garbage, k);
+                        // take incoming damage into meter
+                        gs.meter += opponent_states[opponent_index].gamestate.attack;
                         gs
                     }
                 ).collect();
+
                 if depth == 1 {
                     // use evaluation payoff
                     realized_states.iter().fold(0.0, |accum, &gamestate| {
@@ -190,29 +195,82 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
                             opponent_features[opponent_index].as_ref().unwrap(),
                             config.model_type
                         )
-                    })
+                    }) / 10.0
                 } else {
                     // use subgame payoff
                     realized_states.iter().fold(0.0, |accum, &gamestate| {
                         let (_, value) = solve_position(
-                            &gamestate, 
-                            &opponent_states[opponent_index].gamestate,
+                            gamestate, 
+                            opponent_states[opponent_index].gamestate,
                             depth - 1,
                             config
                         );
                         accum + value
-                    })
+                    }) / 10.0
                 }
             };
 
-            let payoff = if row_states[i].garbage == 0 {
+            let payoff = if 
+                row_states[i].garbage == 0 && 
+                col_states[j].garbage == 0 &&
+                (row_states[i].gamestate.attack ==
+                col_states[j].gamestate.attack)
+            {
+                // case 1: not a chance state and no interaction
+                if depth == 1 {
+                    eval(row_features[i].as_ref().unwrap(), col_features[j].as_ref().unwrap(), config.model_type)
+                } else {
+                    let (_, value) = solve_position(
+                        row_states[i].gamestate, 
+                        col_states[j].gamestate,
+                        depth - 1,
+                        config
+                    );
+                    value
+                }
+            }
+            else if row_states[i].garbage == 0 {
+                // row player has a chance state
                 get_average_payoff(&row_states[i], j, &col_states, &col_features)
             }
-            else if col_states[j].garbage == 0{
+            else if col_states[j].garbage == 0 {
+                // col player has a chance state
                 get_average_payoff(&col_states[j], i, &row_states, &row_features)
             }
             else {
-                eval(row_features[i].as_ref().unwrap(), col_features[j].as_ref().unwrap(), config.model_type)
+                // no chance state, but interaction exists
+                // at least one player is sending damage
+                // the player who sends more 'wins' the trade. the other 'loses'.
+
+                let (winner, winner_features, loser, loser_features, row_wins) =
+                    if row_states[i].gamestate.attack > col_states[j].gamestate.attack {
+                        (&row_states[i], &row_features[i], &col_states[j], &col_features[j], true)
+                    } else {
+                        (&col_states[j], &col_features[j], &row_states[i], &row_features[i], false)
+                    };
+
+                let mut loser_state = loser.gamestate.clone();
+                loser_state.meter += winner.gamestate.attack;
+
+                // use the fact that eval(row,col) = 1 - eval(col,row)
+
+                let winner_value = if depth == 1 {
+                    eval(
+                        winner_features.as_ref().unwrap(),
+                        &extract_features(&loser_state),
+                        config.model_type,
+                    )
+                } else {
+                    let (_, v) = solve_position(
+                        winner.gamestate.clone(),
+                        loser_state,
+                        depth - 1,
+                        config,
+                    );
+                    v
+                };
+
+                if row_wins { winner_value } else { 1.0 - winner_value }
             };
             
             payoffs[i][j] = payoff;

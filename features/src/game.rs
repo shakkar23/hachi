@@ -24,20 +24,16 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn tank_garbage(self, amount:u32) -> Option<[GameState; 10]> {
+    pub fn tank_garbage(&mut self, amount:u32, column:usize) {
         if amount == 0 {
-            return None;
+            return;
         }
 
-        let mut copies: [GameState;10] = [self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone(), self.clone()];
-        for x in 0..10 {
-            for i in 0..10 {
-                copies[x].board.cols[i] <<= amount as u64;
-                let should_fill = x == i;
-                copies[x].board.cols[i] |= if should_fill {(1 << amount) - 1} else {0};
-            }
+        for i in 0..10 {
+            self.board.cols[i] <<= amount as u64;
+            let should_fill = column == i;
+            self.board.cols[i] |= if should_fill {(1 << amount) - 1} else {0};
         }
-        return Some(copies);
     }
 }
 

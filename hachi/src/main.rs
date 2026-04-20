@@ -78,7 +78,7 @@ fn main() {
     // ready immediately
     println!("{}", r#"{"type": "ready"}"#);
     
-    while(true) {
+    while true {
         let mut buffer:String = String::new();
         let _ = std::io::stdin().read_line(&mut buffer);
         let frontend_message = json::parse(&buffer).unwrap_or(
@@ -142,7 +142,7 @@ fn main() {
                             } else {None},
                     }
                 };
-                let hachi_move = solve_position(&state.p1, &state.p2, 1, HachiConfig::default());
+                let hachi_move = solve_position(state.p1, state.p2, 1, HachiConfig::default());
                 let mut move_json = JsonValue::new_object();
                 move_json["location"]["type"] = piece_to_str(hachi_move.0.kind).into();
                 move_json["location"]["orientation"] = rotation_to_str(hachi_move.0.r).into();
