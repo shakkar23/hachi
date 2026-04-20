@@ -26,6 +26,11 @@ fn with_booster<T>(f: impl FnOnce(&Booster) -> T) -> T {
     })
 }
 
+// scale from expectation of sink states {-1,1} to probability of winning [0,1].
+pub fn scale(raw_eval: &f64) -> f64 {
+    (raw_eval + 1.0) / 2.0
+}
+
 pub fn eval(f1: &Features, f2: &Features, config: ModelType) -> f64 {
     eval_batched(&[(f1, f2)], config)[0]
 }
@@ -52,11 +57,11 @@ pub fn eval_batched(pairs: &[(&Features, &Features)], _config: ModelType) -> Vec
             .predict(&data, FEATURES_PER_ROW as i32, true)
             .expect("lightgbm prediction failed");
         result
-    })
+    }).iter().map(|v| scale(v)).collect()
 }
 
 #[test]
-fn smoke_test() {
+fn eval_zeros_test() {
     let f1 = Features::default();
     let f2 = Features::default();
     let result = eval(&f1, &f2, ModelType::LightGBM_Large);

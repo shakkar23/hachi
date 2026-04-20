@@ -2,7 +2,7 @@ use crate::hachi_features;
 use crate::game;
 use crate::static_features;
 use crate::whitelist;
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Features {
     pub heights:[u32;10],
     pub height_differences:[i16;9],
@@ -399,5 +399,47 @@ impl Features {
         vals.push(self.cc_row_transitions as i16);
         
         vals
+    }
+}
+
+impl Default for Features {
+    fn default() -> Self {
+        Features {
+            heights: [0; 10],
+            height_differences: [0; 9],
+            first_hole_depths: [0; 10],
+            garbage_holes: [0; 20],
+            piece_distance: [0; 7],
+            piece_counts: [0; 7],
+            hold_or_current_onehot: [0; 7],
+            next_onehot: [0; 7],
+            all_3x3s: [0; 512],
+            all_3x3s_with_x: [0; 512],
+            all_3x3s_with_y: [0; 512],
+            all_2x2s: [0; 16],
+            all_2x2s_with_x: [0; 16],
+            all_2x2s_with_y: [0; 16],
+            all_2x3s: [0; 64],
+            all_2x3s_with_x: [0; 64],
+            all_2x3s_with_y: [0; 64],
+            all_3x2s: [0; 64],
+            all_3x2s_with_x: [0; 64],
+            all_3x2s_with_y: [0; 64],
+            meter: 0,
+            combo: 0,
+            b2b: 0,
+
+            sunbeam_max_height: 0,
+            sunbeam_bumpiness: 0,
+            sunbeam_well_x: 0,
+            sunbeam_well_depth: 0,
+            sunbeam_max_donated_height: 0,
+            sunbeam_n_donations: 0,
+            sunbeam_t_clears: [0; 4],
+
+            cc_holes: 0,
+            cc_coveredness: 0,
+            cc_row_transitions: 0,
+        }
     }
 }
