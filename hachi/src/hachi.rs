@@ -127,7 +127,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     let row_features: Vec<Option<Features>> = row_states
         .iter()
         .map(|state| {
-            if state.garbage == 0 {
+            if state.garbage == 0 && depth == 1 {
                 Some(extract_features(&state.gamestate))
             } else {
                 None
@@ -138,7 +138,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     let col_features: Vec<Option<Features>> = col_states
         .iter()
         .map(|state| {
-            if state.garbage == 0 {
+            if state.garbage == 0 && depth == 1 {
                 Some(extract_features(&state.gamestate))
             } else {
                 None
@@ -157,7 +157,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     
     // calculate payoffs
 
-    let mut payoffs: Vec<Vec<f64>> = Vec::with_capacity(m);
+    let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
     for i in 0..m {
         for j in 0..n {
 
@@ -206,8 +206,8 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
             let payoff = if row_states[i].garbage == 0 {
                 get_average_payoff(&row_states[i], j, &col_states, &col_features)
             }
-            else if col_states[i].garbage == 0{
-                get_average_payoff(&col_states[i], j, &row_states, &row_features)
+            else if col_states[j].garbage == 0{
+                get_average_payoff(&col_states[j], i, &row_states, &row_features)
             }
             else {
                 eval(row_features[i].as_ref().unwrap(), col_features[j].as_ref().unwrap(), config.model_type)
