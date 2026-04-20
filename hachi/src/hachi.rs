@@ -8,7 +8,7 @@ use bot::{
 
 use tetris::{
     moves::Move,
-    piece::Piece,
+    piece::{Piece, Rotation},
     state::{Lock, State},
     bag::Bag
 };
@@ -45,8 +45,8 @@ pub struct HachiConfig {
 impl Default for HachiConfig {
     fn default() -> Self {
         Self {
-            max_moves: 8,
-            max_responses: 8,
+            max_moves: 4,
+            max_responses: 4,
             use_exact: false,
             model_type: ModelType::LightGBM_Large
         }
@@ -54,11 +54,10 @@ impl Default for HachiConfig {
 }
 
 impl HachiConfig {
-    // if compute constrained, try this
     pub fn rapid() -> Self {
         Self {
-            max_moves: 4,
-            max_responses: 4,
+            max_moves: 3,
+            max_responses: 3,
             use_exact: false,
             model_type: ModelType::LightGBM_Large
         }
@@ -69,6 +68,17 @@ impl HachiConfig {
 pub struct ChanceState {
     pub gamestate: GameState,
     pub garbage: u32
+}
+
+
+pub fn default_move() -> Move {
+    Move {
+        x: 0,
+        y: 0,
+        r: Rotation::North,
+        kind: Piece::O,
+        tspin: None,
+    }
 }
 
 // Solve a two-board position using subgame perfect equilibrium.
@@ -84,6 +94,16 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
     // 20ms here
     let moves1 = get_pruned_moves(&state1, &queue1, config.max_moves);
     let moves2 = get_pruned_moves(&state2, &queue2, config.max_responses);
+
+    // check if we are dead
+    if moves1.len() == 0 {
+        return (default_move(), 0.0);
+    }
+
+    // check if they are dead
+    if moves2.len() == 0 {
+        return (moves1[0], 1.0);
+    }
 
     gamestate1.attack = 0;
     gamestate2.attack = 0;
@@ -164,7 +184,8 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
             // (no passthrough)
             debug_assert!(!(row_states[i].garbage > 0 && col_states[j].garbage > 0));
 
-            // handle chance node
+            // get payoff for chance state from that player's perspective 
+            // (make sure to use correct sign afterwards)
             let get_average_payoff = |
                 chance_state: &ChanceState, 
                 opponent_index: usize, 
@@ -234,7 +255,8 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
             }
             else if col_states[j].garbage != 0 {
                 // col player has a chance state
-                get_average_payoff(&col_states[j], i, &row_states, &row_features)
+                // subtract from 1 to get row's score
+                1.0 - get_average_payoff(&col_states[j], i, &row_states, &row_features)
             }
             else {
                 // no chance state, but interaction exists
@@ -318,14 +340,18 @@ pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move>
                     width: 75
                 },
                 n
-            ).unwrap();
-            table.borrow_mut().put(
-                &key,
-                TableValue{ 
-                   moves: result.clone()
-                }
             );
-            return result;
+            if let Ok(moves) = result {    
+                table.borrow_mut().put(
+                    &key,
+                    TableValue{ 
+                        moves: moves.clone()
+                    }
+                );
+                moves
+            } else {
+                Vec::new() 
+            }
         }
     })
 }

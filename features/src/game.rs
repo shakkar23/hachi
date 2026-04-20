@@ -8,6 +8,7 @@ pub struct Move {
     pub y:u8,
 }
 
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GameState {
     pub board: Board,

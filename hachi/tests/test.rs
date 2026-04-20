@@ -21,19 +21,19 @@ fn make_good_state() -> GameState {
     GameState {
         board: Board {
             cols: [
-                0b00000000000110111111,  // col 0
-                0b00000000000111111111,  // col 1
-                0b00000000000111111111,  // col 2
-                0b00000000000111111111,  // col 3
-                0b00000000000011111111,  // col 4
-                0b00000000000001000001,  // col 5 (the well — only bottom + row 6)
-                0b00000000011011111111,  // col 6
-                0b00000000011111111111,  // col 7
-                0b00000000011111111111,  // col 8
-                0b00000000001111111110,  // col 9 (bottom row empty — tetris-ready)
+                0b00000111111111111111,  // col 0
+                0b00000111111111111111,  // col 1
+                0b00000111111111111111,  // col 2
+                0b00000111111111111111,  // col 3
+                0b00000111111111111111,  // col 4
+                0b00000000000000000000,  // col 5 (the well — only bottom + row 6)
+                0b00000111111111111111,  // col 6
+                0b00000111111111111111,  // col 7
+                0b00000111111111111111,  // col 8
+                0b00000111111111111111,  // col 9 (bottom row empty — tetris-ready)
             ],
         },
-        current_piece: Piece::T,
+        current_piece: Piece::I,
         placement: Move {
             move_type: None,
             rotation: Rotation::North,
@@ -46,7 +46,7 @@ fn make_good_state() -> GameState {
         b2b: 0,
         damage_received: 0,
         spun: false,
-        queue: [Piece::I, Piece::J, Piece::L, Piece::S, Piece::T],
+        queue: [Piece::I, Piece::I, Piece::I, Piece::I, Piece::I],
         hold: None,
     }
 }
@@ -56,7 +56,7 @@ fn make_bad_state() -> GameState {
     GameState {
         board: Board {
             cols: [
-                0b00000000000001100000,  // col 0: rows 5,6 only (the "███████ ██" overhang pair)
+                0b00000010000001100000,  // col 0: rows 5,6 only (the "███████ ██" overhang pair)
                 0b00000001111111111111,  // col 1
                 0b00011111111111111111,  // col 2 (tallest — 17 rows up to the tip)
                 0b00001111111111111111,  // col 3
@@ -102,7 +102,7 @@ fn test_losing_position() {
     let winning_eval = eval(&features2, &features1, ModelType::LightGBM_Large);
     println!("[EVAL] position value (winning): {}", winning_eval);
 
-    for depth in 1..=4 {
+    for depth in 1..=5 {
         let (_, losing) = solve_position(state1, state2, depth, HachiConfig::rapid());
         println!("[DEPTH {}] position value (losing): {}", depth, losing);
 
