@@ -105,7 +105,9 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
         let garbage = if lock.cleared == 0 {
             0
         } else {
-            gs.meter as u32
+            let ret = gs.meter as u32;
+            gs.meter = 0;
+            ret
         };
 
         ChanceState {
@@ -170,7 +172,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
                 opponent_states: &Vec<ChanceState>,
                 opponent_features: &Vec<Option<Features>>| {
 
-                let realized_states: Vec<GameState> = (0..n).map(
+                let realized_states: Vec<GameState> = (0..10).map(
                     |k| {
                         let mut gs = chance_state.gamestate.clone();
                         gs.tank_garbage(chance_state.garbage, k);
@@ -235,7 +237,7 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     (moves1[selected_index], value)
 }
 
-// Pruning essential to avoid payoff model going OOD.
+
 pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
     let key = TableKey { 
         state: state, 
