@@ -29,5 +29,9 @@ harness = false
 name = "hachi"
 harness = false
 
+[[bench]]
+name = "eval"
+harness = false
+
 [env]
 BINDGEN_EXTRA_CLANG_ARGS = "-std=c++17"

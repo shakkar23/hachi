@@ -54,3 +54,19 @@ big_lgb_model = lgb.LGBMRegressor(
     verbosity         = 0    ,
     device = device
 )
+
+small_lgb_model = lgb.LGBMRegressor( 
+    num_leaves       = 15,      
+    max_depth        = 5,        
+    n_estimators     = 100,     
+    learning_rate    = 0.05,    
+    objective        = 'regression',
+    metric           = ['rmse', 'mae'],
+    random_state     = 42,
+    n_jobs           = -1,
+    verbosity        = 0,
+    device           = device,
+    min_child_samples = 20,
+    subsample        = 0.8,
+    colsample_bytree = 0.8
+)

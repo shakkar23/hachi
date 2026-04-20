@@ -327,7 +327,7 @@ pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move>
             return entry.moves.clone();
         } else {
             // 10ms per call here
-            let result = sunbeam_top_n(
+            let result = beam_top_n(
                 state.clone(),
                 Lock {
                     cleared: 0,
@@ -356,7 +356,7 @@ pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move>
     })
 }
 
-pub fn sunbeam_top_n(
+pub fn beam_top_n(
     root: State,
     lock: Lock,
     full_queue: &[Piece],

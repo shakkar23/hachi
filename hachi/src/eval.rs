@@ -8,7 +8,7 @@ pub enum ModelType {
 use lightgbm3::Booster;
 use std::cell::RefCell;
 
-const MODEL_PATH: &str = "../models/td_model.txt";
+const MODEL_PATH: &str = "../models/small_lgb_model.txt";
 const FEATURES_PER_ROW: usize = Features::COUNT * 2;
 
 thread_local! {
