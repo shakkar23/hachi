@@ -126,7 +126,7 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
         .iter()
         .map(|mv| make_state(mv, &state2, &queue2, &gamestate2))
         .collect();
-        
+    
     let row_features: Vec<Option<Features>> = row_states
         .iter()
         .map(|state| {

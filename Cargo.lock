@@ -707,6 +707,7 @@ checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 name = "features"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "itertools 0.12.1",
  "struct_iterable",
  "tetris",
