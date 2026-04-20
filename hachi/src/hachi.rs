@@ -60,7 +60,7 @@ impl HachiConfig {
             max_moves: 4,
             max_responses: 4,
             use_exact: false,
-            model_type: ModelType::CatBoost_Small
+            model_type: ModelType::LightGBM_Large
         }
     }
 }

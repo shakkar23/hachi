@@ -3,19 +3,9 @@ use features::feature_extractor::Features;
 #[derive(Debug, Clone, Copy)]
 pub enum ModelType {
     LightGBM_Large,
-    CatBoost_Small
 }
 
-/*
-use features::feature_extractor::Features;
-
-#[derive(Debug, Clone, Copy)]
-pub enum ModelType {
-    LightGBM_Large,
-    CatBoost_Small
-}
-
-use lightgbm_rust::{predict_type, Booster};
+use lightgbm3::Booster;
 use std::cell::RefCell;
 
 const MODEL_PATH: &str = "../models/td_model.txt";
@@ -29,8 +19,9 @@ fn with_booster<T>(f: impl FnOnce(&Booster) -> T) -> T {
     BOOSTER.with(|cell| {
         let mut opt = cell.borrow_mut();
         let booster = opt.get_or_insert_with(|| {
-            Booster::load(MODEL_PATH).expect("failed to load lightgbm model")
+            Booster::from_file(MODEL_PATH).expect("failed to load lightgbm model")
         });
+        let expected = booster.num_features();
         f(booster)
     })
 }
@@ -39,7 +30,7 @@ pub fn eval(f1: &Features, f2: &Features, config: ModelType) -> f64 {
     eval_batched(&[(f1, f2)], config)[0]
 }
 
-pub fn eval_batched(pairs: &[(&Features, &Features)], config: ModelType) -> Vec<f64> {
+pub fn eval_batched(pairs: &[(&Features, &Features)], _config: ModelType) -> Vec<f64> {
     if pairs.is_empty() {
         return Vec::new();
     }
@@ -57,27 +48,17 @@ pub fn eval_batched(pairs: &[(&Features, &Features)], config: ModelType) -> Vec<
     }
 
     with_booster(|booster| {
-        booster
-            .predict(&data, num_rows as i32, FEATURES_PER_ROW as i32, predict_type::NORMAL)
-            .expect("lightgbm prediction failed")
+        let result = booster
+            .predict(&data, FEATURES_PER_ROW as i32, true)
+            .expect("lightgbm prediction failed");
+        result
     })
 }
-*/
 
-use rand::random;
-use std::time::Duration;
-use std::time::Instant;
-
-pub fn eval(f1: &Features, f2: &Features, config: ModelType) -> f64 {
-    eval_batched(&[(f1, f2)], config)[0]
-}
-
-pub fn eval_batched(pairs: &[(&Features, &Features)], _config: ModelType) -> Vec<f64> {
-    pairs.iter().map(|_| {
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_micros(100) {
-            std::hint::spin_loop();
-        }
-        random::<f64>()
-    }).collect()
+#[test]
+fn smoke_test() {
+    let f1 = Features::default();
+    let f2 = Features::default();
+    let result = eval(&f1, &f2, ModelType::LightGBM_Large);
+    println!("result: {}", result);
 }
