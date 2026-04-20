@@ -19,7 +19,7 @@ use rand::distributions::WeightedIndex;
 use features::feature_extractor::Features;
 use features::feature_extractor::extract_features;
 
-use crate::eval::{eval_batched, ModelType};
+use crate::eval::{eval, eval_batched, ModelType};
 use crate::solver::{nash_equilibrium, nash_equilibrium_exact};
 use crate::table::{MoveTable, TableKey, TableValue};
 
@@ -70,9 +70,9 @@ impl HachiConfig {
 }
 
 #[derive(PartialEq, Eq)]
-enum StateState {
-    One(GameState),
-    Ten([GameState;10])
+pub struct ChanceState {
+    pub gamestate: GameState,
+    pub garbage: u32
 }
 
 // Solve a two-board position using subgame perfect equilibrium.
@@ -85,204 +85,144 @@ pub fn solve_position(gamestate1: &GameState, gamestate2: &GameState, depth: usi
     let state1:State = gamestate_to_state(&gamestate1);
     let state2:State = gamestate_to_state(&gamestate2);
 
-    // awyzza: 20ms here
+    // 20ms here
     let moves1 = get_pruned_moves(&state1, &queue1, config.max_moves);
     let moves2 = get_pruned_moves(&state2, &queue2, config.max_responses);
 
     // row states and column states, we join them later
 
-    let row_states: Vec<StateState> = moves1
-        .iter()
-        .map(|mv| {
-            let mut s = state1.clone();
-            let lock = s.make(mv, &queue1);
-            let mut gs = gamestate1.clone();
-            gs.board = s.board;
-            gs.b2b = s.b2b;
-            gs.combo = s.combo;
+    let make_state = |mv: &Move, state: &State, queue: &[Piece;5], gamestate: &GameState| {
+        let mut s = state.clone();
+        let lock = s.make(mv, queue);
+        let mut gs = gamestate.clone();
+        gs.board = s.board;
+        gs.b2b = s.b2b;
+        gs.combo = s.combo;
 
-            let next_meter = gs.meter.saturating_sub(lock.sent);
-            gs.attack = lock.sent - gs.meter.abs_diff(next_meter);
-            gs.meter = next_meter;
-            if lock.cleared == 0 {
-                let next_states = gs.tank_garbage(gs.meter as u32);
-                if let Some(actual_next_states) = next_states {
-                    return StateState::Ten(actual_next_states);
-                }
-            }
-            StateState::One(gs)
-        })
-        .collect();
-    let column_states: Vec<StateState> = moves2
-        .iter()
-        .map(|mv| {
-            let mut s = state2.clone();
-            let lock = s.make(mv, &queue2);
-            let mut gs = gamestate2.clone();
-            gs.board = s.board;
-            gs.b2b = s.b2b;
-            gs.combo = s.combo;
+        let next_meter = gs.meter.saturating_sub(lock.sent);
+        gs.attack = lock.sent - gs.meter.abs_diff(next_meter);
+        gs.meter = next_meter;
+        let garbage = if lock.cleared == 0 {
+            0
+        } else {
+            gs.meter as u32
+        };
 
-            let next_meter = gs.meter.saturating_sub(lock.sent);
-            gs.attack = lock.sent - gs.meter.abs_diff(next_meter);
-            gs.meter = next_meter;
-            if lock.cleared == 0 {
-                let next_states = gs.tank_garbage(gs.meter as u32);
-                if let Some(actual_next_states) = next_states {
-                    return StateState::Ten(actual_next_states);
-                }
-            }
-            StateState::One(gs)
-        })
+        ChanceState {
+            gamestate: gs,
+            garbage,
+        }
+    };
+
+    let row_states: Vec<ChanceState> = moves1
+        .iter()
+        .map(|mv| make_state(mv, &state1, &queue1, &gamestate1))
         .collect();
 
-    // calculate features along axes once and join later
-    
-    let row_features: Vec<Vec<Features>> = row_states
+    let col_states: Vec<ChanceState> = moves2
+        .iter()
+        .map(|mv| make_state(mv, &state2, &queue2, &gamestate2))
+        .collect();
+        
+    let row_features: Vec<Option<Features>> = row_states
         .iter()
         .map(|state| {
-            if let StateState::One(one) = state {
-                return vec![extract_features(one)];
+            if state.garbage == 0 {
+                Some(extract_features(&state.gamestate))
+            } else {
+                None
             }
-            if let StateState::Ten(ten) = state {
-                return ten.clone().map(|one_of_ten|{extract_features(&one_of_ten)}).to_vec();
-            }
-            unreachable!();
         })
         .collect();
 
-    let col_features: Vec<Vec<Features>> = column_states
+    let col_features: Vec<Option<Features>> = col_states
         .iter()
         .map(|state| {
-            if let StateState::One(one) = state {
-                return vec![extract_features(one)];
+            if state.garbage == 0 {
+                Some(extract_features(&state.gamestate))
+            } else {
+                None
             }
-            if let StateState::Ten(ten) = state {
-                return ten.clone().map(|one_of_ten|{extract_features(&one_of_ten)}).to_vec();
-            }
-            unreachable!();
         })
         .collect();
 
     let m:usize = moves1.len();
     let n:usize = moves2.len();
 
-    // the grid looks like this
-    // -----------------------
-    // |          |----------|
-    // |   one    |----------|
-    // |  state   |----------|
-    // |          |----------|
-    // -----------------------
-    // |  | | | | |  | | | | |
-    // |  | | | | |  | | | | |
-    // |  | | | | |----------|
-    // |  | | | | |  | | | | |
-    // -----------------------
-    let mut move_payoffs:Vec<Vec<f64>> = Vec::with_capacity(m);
-
-    for i in 0..m {
-        move_payoffs.push(Vec::with_capacity(n));
-        for j in 0..n {
-            // calculate one payoff
-            // averages the move_payoffs evenly because garbage is evenly dispursed, and theres no action after this point
-            let m2 = row_features[n].len();
-            let mut pairs:Vec<(&Features, &Features)>= Vec::with_capacity(10*10);
-            for ii in 0..m2 {
-                let n2 = col_features[n].len();
-                for jj in 0..n2 {
-                    pairs.push((&row_features[i][ii], &col_features[j][jj]));
-                }
-            }
-            let flat = eval_batched(&pairs, config.model_type);
-            let sum: f64 = flat.iter().sum();
-            let count = flat.len() as f64;
-
-            let average = if count > 0.0 { sum / count } else { 0.0 };
-            move_payoffs[i].push(average);
-        }
-    }
     
-    // create batch for eval
-    // let mut pairs: Vec<(&Features, &Features)> = Vec::with_capacity(m * n);
-    // for i in 0..m {
-    //     for j in 0..n {
-    //         pairs.push((&row_features[i], &col_features[j]));
-    //     }
-    // }
+    /*
+        Subgame solving complexity:
+        O(((m+n)*beam_search_cost)^depth + (m*n*eval_cost)^depth)
+    */
+    
+    // calculate payoffs
 
-    //let flat = eval_batched(&pairs);
+    let mut payoffs: Vec<Vec<f64>> = Vec::with_capacity(m);
+    for i in 0..m {
+        for j in 0..n {
 
-    //let mut flat: Vec<f64> = Vec::new();
+            // it's impossible for both players to tank garbage at the same time
+            // (no passthrough)
 
-    if depth == 1 {
-        // awyzza: 100 microseconds using catboost small
-        // awyzza: 2 ms using lightgbm large
-        // awyzza: but note this runs 64 times at depth 2
-        // awyzza: so it's still like 100-200ms total
-        // awyzza: or 5-10ms using cb_s
-        //flat = eval_batched(&pairs, config.model_type);
-    } else {
-        /*
-            O((m+n)*beam_search_cost + m*n*eval_cost)
-            in principle, row/column siblings have the same
-            movesets which they read from the table.
-            note: table hot path could be bypassed altogether
-            by computing values here and then passing them into
-            each `solve_position` call. may reduce overhead
-        */
-        // awyzza: this loop costs about 200ms at depth = 2
-        // awyzza: also, cousins can share moves too.
-        // awyzza: you would still need the table for that.
-        let mut flat:Vec<f64> = Vec::new();
-        for i in 0..m {
-            let mut subgame_values = Vec::new();
-            for j in 0..n {
-                let m_is_one = matches!(row_states[i], StateState::One(_));
-                let m2 = if m_is_one {1} else {10};
-                for ii in 0..m2 {
-                    let n_is_one = matches!(column_states[j], StateState::One(_));
+            let get_average_payoff = |
+                chance_state: &ChanceState, 
+                opponent_index: usize, 
+                opponent_states: &Vec<ChanceState>,
+                opponent_features: &Vec<Option<Features>>| {
 
-                    let m1_state = match row_states[i] {
-                            StateState::One(s) => s,
-                            StateState::Ten(t) => t[ii]
-                        };
-
-                    let n2 = if m_is_one {1} else {10};
-                    for jj in 0..n2 {
-                        
-                        let n1_state = match column_states[j] {
-                                StateState::One(s) => s,
-                                StateState::Ten(t) => t[jj]
-                            };
-                        let (_, subgame_value) = solve_position(
-                            &m1_state,
-                            &n1_state,
+                let realized_states: Vec<GameState> = (0..n).map(
+                    |k| {
+                        let mut gs = chance_state.gamestate.clone();
+                        gs.tank_garbage(chance_state.garbage, k);
+                        gs
+                    }
+                ).collect();
+                if depth == 1 {
+                    // use evaluation payoff
+                    realized_states.iter().fold(0.0, |accum, &gamestate| {
+                        if let None = opponent_features[opponent_index] {
+                            unreachable!();
+                        }
+                        accum + eval(
+                            &extract_features(&gamestate), 
+                            opponent_features[opponent_index].as_ref().unwrap(),
+                            config.model_type
+                        )
+                    })
+                } else {
+                    // use subgame payoff
+                    realized_states.iter().fold(0.0, |accum, &gamestate| {
+                        let (_, value) = solve_position(
+                            &gamestate, 
+                            &opponent_states[opponent_index].gamestate,
                             depth - 1,
                             config
                         );
-                        subgame_values.push(subgame_value);
-                    }
+                        accum + value
+                    })
                 }
-                flat.push(subgame_values.iter().sum::<f64>() / subgame_values.len() as f64);
+            };
+
+            let payoff = if row_states[i].garbage == 0 {
+                get_average_payoff(&row_states[i], j, &col_states, &col_features)
             }
+            else if col_states[i].garbage == 0{
+                get_average_payoff(&col_states[i], j, &row_states, &row_features)
+            }
+            else {
+                eval(row_features[i].as_ref().unwrap(), col_features[j].as_ref().unwrap(), config.model_type)
+            };
+            
+            payoffs[i][j] = payoff;
         }
     }
-
-    // Player 1 perspective
-    // let mut payoffs: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
-    // for i in 0..m {
-    //     for j in 0..n {
-    //         payoffs[i][j] = flat[i * n + j];
-    //     }
-    // }
 
     // calculate best strategy and win expectation
 
     let (row_strategy, _, value) = if config.use_exact {
-        nash_equilibrium_exact(&move_payoffs) // awyzza: 200 microseconds.
+        nash_equilibrium_exact(&payoffs) // 200 microseconds.
     } else {
-        nash_equilibrium(&move_payoffs) // awyzza: 20 microseconds.
+        nash_equilibrium(&payoffs) // 20 microseconds.
     };
 
     // execute mixed strategy
@@ -305,7 +245,7 @@ pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move>
         if let Some(entry) = table.borrow().get(&key) {
             return entry.moves.clone();
         } else {
-            // awyzza: 10ms per call here
+            // 10ms per call here
             let result = sunbeam_top_n(
                 state.clone(),
                 Lock {
