@@ -33,6 +33,12 @@ fn hash(key: &TableKey) -> u64 {
         state = state.wrapping_mul(0x5851F42D4C957F2D);
     }
     
+    state ^= key.piece as u64;
+    state ^= state << 13;
+    state ^= state >> 7;
+    state ^= state << 17;
+    state = state.wrapping_mul(0x5851F42D4C957F2D);
+    
     state
 }
 

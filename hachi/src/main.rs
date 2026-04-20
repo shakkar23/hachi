@@ -30,7 +30,7 @@ fn sbp_board_to_board(board_json:&JsonValue) -> Board {
     let mut b = Board::new();
     for x in 0..board_json.len() {
         for y in 0..board_json["0"].len() {
-            let filled_cell = board_json[x][y].is_null();
+            let filled_cell = !board_json[x][y].is_null();
             if filled_cell {
                 b.set(x as i8, y as i8);
             }
@@ -53,7 +53,7 @@ fn piece_to_str(p:Piece) -> &'static str {
 fn rotation_to_str(r:Rotation) -> &'static str {
     match r {
         Rotation::North => "north",
-        Rotation::East => "wast",
+        Rotation::East => "east",
         Rotation::South => "south",
         Rotation::West => "west",
         _ => unreachable!()
@@ -142,7 +142,7 @@ fn main() {
                             } else {None},
                     }
                 };
-                let hachi_move = solve_position(state.p1, state.p2, 1, HachiConfig::default());
+                let hachi_move = solve_position(state.p1, state.p2, 3, HachiConfig::rapid());
                 let mut move_json = JsonValue::new_object();
                 move_json["location"]["type"] = piece_to_str(hachi_move.0.kind).into();
                 move_json["location"]["orientation"] = rotation_to_str(hachi_move.0.r).into();
