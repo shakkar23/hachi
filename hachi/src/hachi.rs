@@ -40,10 +40,6 @@ pub struct HachiConfig {
     `max_responses`: Number of moves to consider for opponent side.
     `use_exact`: `true` to solve equilibriums exactly, or `false` to approximate.
     `model_type`: Model to use for evaluation at leaf positions.
-
-    Smaller values for `max_moves` and `max_responses` result
-    in more time spent on beam search. Larger values result in
-    more time spent evaluating the payoff model.
 */
 
 impl Default for HachiConfig {
@@ -59,7 +55,7 @@ impl Default for HachiConfig {
 
 impl HachiConfig {
     // if compute constrained, try this
-    fn rapid() -> Self {
+    pub fn rapid() -> Self {
         Self {
             max_moves: 4,
             max_responses: 4,
@@ -69,7 +65,7 @@ impl HachiConfig {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ChanceState {
     pub gamestate: GameState,
     pub garbage: u32
@@ -166,6 +162,7 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
 
             // it's impossible for both players to tank garbage at the same time
             // (no passthrough)
+            debug_assert!(!(row_states[i].garbage > 0 && col_states[j].garbage > 0));
 
             // handle chance node
             let get_average_payoff = |
@@ -188,6 +185,8 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                     // use evaluation payoff
                     realized_states.iter().fold(0.0, |accum, &gamestate| {
                         if let None = opponent_features[opponent_index] {
+                            println!("{:#?}", chance_state);
+                            println!("{:#?}", opponent_states[opponent_index]);
                             unreachable!();
                         }
                         accum + eval(
@@ -229,11 +228,11 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                     value
                 }
             }
-            else if row_states[i].garbage == 0 {
+            else if row_states[i].garbage != 0 {
                 // row player has a chance state
                 get_average_payoff(&row_states[i], j, &col_states, &col_features)
             }
-            else if col_states[j].garbage == 0 {
+            else if col_states[j].garbage != 0 {
                 // col player has a chance state
                 get_average_payoff(&col_states[j], i, &row_states, &row_features)
             }

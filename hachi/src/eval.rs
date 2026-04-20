@@ -7,10 +7,18 @@ pub enum ModelType {
 }
 
 /*
+use features::feature_extractor::Features;
+
+#[derive(Debug, Clone, Copy)]
+pub enum ModelType {
+    LightGBM_Large,
+    CatBoost_Small
+}
+
 use lightgbm_rust::{predict_type, Booster};
 use std::cell::RefCell;
 
-const MODEL_PATH: &str = "models/td_model.txt";
+const MODEL_PATH: &str = "../models/td_model.txt";
 const FEATURES_PER_ROW: usize = Features::COUNT * 2;
 
 thread_local! {
@@ -27,11 +35,11 @@ fn with_booster<T>(f: impl FnOnce(&Booster) -> T) -> T {
     })
 }
 
-pub fn eval(f1: &Features, f2: &Features) -> f64 {
-    eval_batched(&[(f1, f2)])[0]
+pub fn eval(f1: &Features, f2: &Features, config: ModelType) -> f64 {
+    eval_batched(&[(f1, f2)], config)[0]
 }
 
-pub fn eval_batched(pairs: &[(&Features, &Features)]) -> Vec<f64> {
+pub fn eval_batched(pairs: &[(&Features, &Features)], config: ModelType) -> Vec<f64> {
     if pairs.is_empty() {
         return Vec::new();
     }
@@ -56,10 +64,20 @@ pub fn eval_batched(pairs: &[(&Features, &Features)]) -> Vec<f64> {
 }
 */
 
+use rand::random;
+use std::time::Duration;
+use std::time::Instant;
+
 pub fn eval(f1: &Features, f2: &Features, config: ModelType) -> f64 {
     eval_batched(&[(f1, f2)], config)[0]
 }
 
-pub fn eval_batched(pairs: &[(&Features, &Features)], config: ModelType) -> Vec<f64> {
-    Vec::new()
+pub fn eval_batched(pairs: &[(&Features, &Features)], _config: ModelType) -> Vec<f64> {
+    pairs.iter().map(|_| {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_micros(100) {
+            std::hint::spin_loop();
+        }
+        random::<f64>()
+    }).collect()
 }
