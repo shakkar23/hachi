@@ -101,12 +101,12 @@ fn test_losing_position() {
     let winning_eval = eval(&features2, &features1, ModelType::LightGBM_Large);
     println!("[EVAL] position value (winning): {}", winning_eval);
 
-    for depth in 6..=6 {
+    for depth in 1..=4 {
         let (_, losing) = solve_position(state1, state2, depth, HachiConfig::rapid());
         println!("[DEPTH {}] position value (losing): {}", depth, losing);
 
-        //let (_, winning) = solve_position(state2, state1, depth, HachiConfig::rapid());
-        //println!("[DEPTH {}] position value (winning): {}", depth, winning);
+        let (_, winning) = solve_position(state2, state1, depth, HachiConfig::rapid());
+        println!("[DEPTH {}] position value (winning): {}", depth, winning);
     }
 }
 
