@@ -56,8 +56,8 @@ impl Default for HachiConfig {
 impl HachiConfig {
     pub fn rapid() -> Self {
         Self {
-            max_moves: 3,
-            max_responses: 3,
+            max_moves: 1,
+            max_responses: 1,
             use_exact: false,
             model_type: ModelType::LightGBM_Large
         }
@@ -81,6 +81,18 @@ pub fn default_move() -> Move {
     }
 }
 
+pub fn u64_to_piece(x:u64) -> Piece{
+    match x {
+        0 => Piece::I,
+        1 => Piece::O,
+        2 => Piece::T,
+        3 => Piece::L,
+        4 => Piece::S,
+        5 => Piece::J,
+        _ => Piece::Z,
+    }
+}
+
 // Solve a two-board position using subgame perfect equilibrium.
 // Returns: (best_move, win_probability)
 pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, depth: usize, config: HachiConfig) -> (Move, f64) {
@@ -97,13 +109,11 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
 
     // check if we are dead
     if moves1.len() == 0 {
-        println!("row player dies");
         return (default_move(), 0.0);
     }
 
     // check if they are dead
     if moves2.len() == 0 {
-        println!("col player dies");
         return (moves1[0], 1.0);
     }
 
@@ -117,16 +127,21 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
         gs.board = s.board;
         gs.b2b = s.b2b;
         gs.combo = s.combo;
+        gs.queue.rotate_left(1);
+
+        // cheeky pseudo rng - monte carlo speculation
+        gs.queue[4] = u64_to_piece(gs.board.cols.iter().sum::<u64>() % 7);
 
         let next_meter = gs.meter.saturating_sub(lock.sent);
         gs.attack = lock.sent - gs.meter.abs_diff(next_meter);
         gs.meter = next_meter;
+        println!("cleared lines {}", lock.cleared);
         let garbage = if lock.cleared == 0 {
-            0
-        } else {
             let ret = gs.meter as u32;
             gs.meter = 0;
             ret
+        } else {
+            0
         };
 
         ChanceState {
@@ -135,11 +150,13 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
         }
     };
 
+    println!("row player");
     let row_states: Vec<ChanceState> = moves1
         .iter()
         .map(|mv| make_state(mv, &state1, &queue1, &gamestate1))
         .collect();
 
+    println!("col player");
     let col_states: Vec<ChanceState> = moves2
         .iter()
         .map(|mv| make_state(mv, &state2, &queue2, &gamestate2))
@@ -170,6 +187,7 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
     let m:usize = moves1.len();
     let n:usize = moves2.len();
 
+    println!("depth {}", depth);
     
     /*
         Subgame solving complexity:
@@ -195,14 +213,14 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                 opponent_features: &Vec<Option<Features>>| {
 
                 let realized_states: Vec<GameState> = (0..10).map(
-                    |k| {
-                        let mut gs = chance_state.gamestate.clone();
-                        gs.tank_garbage(chance_state.garbage, k);
-                        // take incoming damage into meter
-                        gs.meter += opponent_states[opponent_index].gamestate.attack;
-                        gs
-                    }
-                ).collect();
+                        |k| {
+                            let mut gs = chance_state.gamestate.clone();
+                            gs.tank_garbage(chance_state.garbage * 10, k);
+                            // take incoming damage into meter
+                            gs.meter += opponent_states[opponent_index].gamestate.attack;
+                            gs
+                        }
+                    ).collect();
 
                 if depth == 1 {
                     // use evaluation payoff
@@ -233,11 +251,13 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
             };
 
             let payoff = if 
-                row_states[i].garbage == 0 && 
+                row_states[i].garbage == 0 && // not tanking
                 col_states[j].garbage == 0 &&
                 (row_states[i].gamestate.attack ==
-                col_states[j].gamestate.attack)
+                col_states[j].gamestate.attack) // meters not changing
             {
+                
+                println!("no interaction");
                 // case 1: not a chance state and no interaction
                 if depth == 1 {
                     eval(row_features[i].as_ref().unwrap(), col_features[j].as_ref().unwrap(), config.model_type)
@@ -252,23 +272,30 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                 }
             }
             else if row_states[i].garbage != 0 {
+                
+                println!("row player is tanking");
                 // row player has a chance state
                 get_average_payoff(&row_states[i], j, &col_states, &col_features)
             }
             else if col_states[j].garbage != 0 {
                 // col player has a chance state
                 // subtract from 1 to get row's score
+                println!("col player is tanking");
                 1.0 - get_average_payoff(&col_states[j], i, &row_states, &row_features)
             }
             else {
                 // no chance state, but interaction exists
                 // at least one player is sending damage
                 // the player who sends more 'wins' the trade. the other 'loses'.
+                
+                println!("nobody is tanking but trade is happening");
 
                 let (winner, winner_features, loser, loser_features, row_wins) =
                     if row_states[i].gamestate.attack > col_states[j].gamestate.attack {
+                        println!("row player wins trade");
                         (&row_states[i], &row_features[i], &col_states[j], &col_features[j], true)
                     } else {
+                        println!("col player wins trade");
                         (&col_states[j], &col_features[j], &row_states[i], &row_features[i], false)
                     };
 
@@ -339,7 +366,7 @@ pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move>
                 queue,
                 Weights::default(),
                 BotConfigs {
-                    width: 75
+                    width: 150
                 },
                 n
             );

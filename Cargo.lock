@@ -333,7 +333,7 @@ dependencies = [
 [[package]]
 name = "bot"
 version = "0.1.0"
-source = "git+https://github.com/nightcrab/sunbeam#cb240c3c7ab8b90238059d790a70bdee2ad7a681"
+source = "git+https://github.com/nightcrab/sunbeam#c6b86418fcf5a4d8b3d4b235512c1e901607a7cf"
 dependencies = [
  "enumset",
  "strum",
@@ -2593,7 +2593,7 @@ dependencies = [
 [[package]]
 name = "tetris"
 version = "0.1.0"
-source = "git+https://github.com/nightcrab/sunbeam#cb240c3c7ab8b90238059d790a70bdee2ad7a681"
+source = "git+https://github.com/nightcrab/sunbeam#c6b86418fcf5a4d8b3d4b235512c1e901607a7cf"
 dependencies = [
  "enumset",
  "serde",
