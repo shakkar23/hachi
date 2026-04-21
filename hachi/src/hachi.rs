@@ -97,11 +97,13 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
 
     // check if we are dead
     if moves1.len() == 0 {
+        println!("row player dies");
         return (default_move(), 0.0);
     }
 
     // check if they are dead
     if moves2.len() == 0 {
+        println!("col player dies");
         return (moves1[0], 1.0);
     }
 

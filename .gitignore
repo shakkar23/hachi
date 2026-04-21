@@ -6,6 +6,7 @@ build_rel/
 database.db
 training.duckdb
 train/__pycache__/
+models/*
 catboost_info
 15.db
 15.duckdb

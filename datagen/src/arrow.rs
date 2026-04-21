@@ -7,7 +7,7 @@ use duckdb::arrow::error::ArrowError;
 
 use std::sync::Arc;
 
-use crate::feature_extractor::{Features, Row};
+use features::feature_extractor::{Features, Row};
 
 pub fn rows_to_record_batch(rows: &[Row]) -> Result<RecordBatch, ArrowError> {
     let n_rows = rows.len();

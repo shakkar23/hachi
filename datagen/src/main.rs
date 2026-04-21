@@ -11,7 +11,9 @@ use duckdb::{Connection as DuckConnection, Result as DuckResult, Error as DuckEr
 
 use features::feature_extractor::{Features, Row};
 
-use features::arrow::rows_to_record_batch;
+pub mod arrow;
+
+use crate::arrow::rows_to_record_batch;
 
 use features::game::{GameState,Move,Datum,State};
 

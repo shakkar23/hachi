@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-duckdb = { version = "1.4.4", features = ["bundled", "appender-arrow"] }
+duckdb = { version = "1.4.4", features = ["appender-arrow"] }
 rayon = "1.7"
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 features = { path = "../features" }
+tetris = { git = "https://github.com/nightcrab/sunbeam" }

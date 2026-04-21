@@ -59,5 +59,12 @@ fn bench_solve_position(c: &mut Criterion) {
     group.finish();
 }
 
+#[test]
+fn test_position() {
+    let state1 = make_state();
+    let state2 = make_state();
+    solve_position(black_box(state1), black_box(state2), 4, HachiConfig::rapid())
+}
+
 criterion_group!(benches, bench_solve_position);
 criterion_main!(benches);
