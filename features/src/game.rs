@@ -64,7 +64,7 @@ impl Default for GameState {
             b2b: 0,
             damage_received: 0,
             spun: false,
-            queue: [Piece::I, Piece::I, Piece::I, Piece::I, Piece::I],
+            queue: [Piece::T, Piece::O, Piece::L, Piece::J, Piece::S],
             hold: None,
         }
     }

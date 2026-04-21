@@ -56,8 +56,16 @@ impl Default for HachiConfig {
 impl HachiConfig {
     pub fn rapid() -> Self {
         Self {
-            max_moves: 3,
-            max_responses: 3,
+            max_moves: 2,
+            max_responses: 2,
+            use_exact: false,
+            model_type: ModelType::LightGBM_Large
+        }
+    }
+    pub fn beam() -> Self {
+        Self {
+            max_moves: 1,
+            max_responses: 1,
             use_exact: false,
             model_type: ModelType::LightGBM_Large
         }
@@ -126,6 +134,7 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
         let mut gs = gamestate.clone();
         gs.board = s.board;
         gs.b2b = s.b2b;
+        gs.hold = s.hold;
         gs.combo = s.combo;
         gs.queue.rotate_left(1);
 
@@ -204,6 +213,9 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
             // (no passthrough)
             debug_assert!(!(row_states[i].garbage > 0 && col_states[j].garbage > 0));
 
+            // it's also impossible for both meters to contain garbage
+            debug_assert!(!(row_states[i].gamestate.meter > 0 && col_states[j].gamestate.meter > 0));
+
             // get payoff for chance state from that player's perspective 
             // (make sure to use correct sign afterwards)
             let get_average_payoff = |
@@ -226,8 +238,8 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                     // use evaluation payoff
                     realized_states.iter().fold(0.0, |accum, &gamestate| {
                         if let None = opponent_features[opponent_index] {
-                            // println!("{:#?}", chance_state);
-                            // println!("{:#?}", opponent_states[opponent_index]);
+                            println!("{:#?}", chance_state);
+                            println!("{:#?}", opponent_states[opponent_index]);
                             unreachable!();
                         }
                         accum + eval(
