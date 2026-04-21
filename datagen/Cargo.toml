@@ -9,3 +9,4 @@ rayon = "1.7"
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 features = { path = "../features" }
 tetris = { git = "https://github.com/nightcrab/sunbeam" }
+bot = { git = "https://github.com/nightcrab/sunbeam" }
