@@ -955,6 +955,8 @@ dependencies = [
  "minilp",
  "rand 0.8.6",
  "rand_distr",
+ "serde",
+ "serde_json",
  "tetris",
 ]
 

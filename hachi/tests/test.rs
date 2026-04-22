@@ -22,7 +22,7 @@ use tetris::{
     bag::Bag,
 };
 
-use hachi::hachi::{gamestate_to_state, get_pruned_moves, u64_to_piece};
+use hachi::hachi::{gamestate_to_state, get_pruned_moves, u64_to_piece, drain_tree_dump};
 
 fn make_good_state() -> GameState {
     GameState {
@@ -82,6 +82,64 @@ fn make_bad_state() -> GameState {
     }
 }
 
+fn make_ok_state1() -> GameState {
+    GameState {
+        board: Board {
+            cols: [
+                0b00000000011111111111,
+                0b00000000011111111111,
+                0b00000000011111111111,
+                0b00000000011111110111,
+                0b00000000001111111111,
+                0b00000000000000001000,
+                0b00000000001111111111,
+                0b00000000011111111111,
+                0b00000000111111111111,
+                0b00000000111111111111,
+            ],
+        },
+        current_piece: Piece::Z,
+        placement: Move { move_type: None, rotation: Rotation::North, x: 0, y: 0 },
+        meter: 0,
+        combo: 0,
+        attack: 0,
+        b2b: 0,
+        damage_received: 0,
+        spun: false,
+        queue: [Piece::O, Piece::L, Piece::T, Piece::I, Piece::I],
+        hold: None,
+    }
+}
+
+fn make_ok_state2() -> GameState {
+    GameState {
+        board: Board {
+            cols: [
+                0b00000000011111111111,
+                0b00000000011111111111,
+                0b00000000000001110111,
+                0b00000000011111110111,
+                0b00000000001111111111,
+                0b00000000000000001100,
+                0b00000000101111111111,
+                0b00000000111111111011,
+                0b00000000111111111111,
+                0b00000000111111111111,
+            ],
+        },
+        current_piece: Piece::I,
+        placement: Move { move_type: None, rotation: Rotation::North, x: 0, y: 0 },
+        meter: 0,
+        combo: 0,
+        attack: 0,
+        b2b: 0,
+        damage_received: 0,
+        spun: false,
+        queue: [Piece::I, Piece::J, Piece::Z, Piece::S, Piece::T],
+        hold: None,
+    }
+}
+
 #[test]
 fn test_losing_position() {
     let state1 = make_bad_state();
@@ -103,6 +161,37 @@ fn test_losing_position() {
         let (_, winning) = solve_position(state2, state1, depth, HachiConfig::rapid());
         println!("[DEPTH {}] position value (winning): {}", depth, winning);
     }
+}
+
+
+#[test]
+fn generate_dump() {
+    let mut state1 = make_ok_state1();
+    let mut state2 = make_ok_state2();
+    
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let seed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos() as u64;
+    
+    let mut rng: u64 = seed | 1;
+    let mut next = || {
+        rng ^= rng << 13;
+        rng ^= rng >> 7;
+        rng ^= rng << 17;
+        rng
+    };
+    
+    for queue in [&mut state1.queue, &mut state2.queue] {
+        for i in (1..queue.len()).rev() {
+            let j = (next() as usize) % (i + 1);
+            queue.swap(i, j);
+        }
+    }
+
+    let (_, _) = solve_position(state1, state2, 5, HachiConfig::rapid());
+    std::fs::write("dump.json", drain_tree_dump()).unwrap();
 }
 
 enum GameOutcome {
@@ -159,18 +248,18 @@ fn self_play(seed: u64, config1: HachiConfig, config2: HachiConfig, depth: usize
 
         if state1.meter > 0 && state1.combo == 0 {
             state1.tank_garbage(state1.meter as u32, next() as usize % 10);
-            println!("P1 tanks {} garbage", state1.meter);
+            //println!("P1 tanks {} garbage", state1.meter);
             state1.meter = 0;
         }
         if state2.meter > 0 && state2.combo == 0 {
             state2.tank_garbage(state2.meter as u32, next() as usize % 10);
-            println!("P2 tanks {} garbage", state2.meter);
+            //println!("P2 tanks {} garbage", state2.meter);
             state2.meter = 0;
         }
 
         if state1.attack > state2.attack {
             state1.attack -= state2.attack;
-            state1.attack = 2;
+            state1.attack = 0;
         } else {
             state2.attack -= state1.attack;
             state1.attack = 0;
@@ -179,12 +268,12 @@ fn self_play(seed: u64, config1: HachiConfig, config2: HachiConfig, depth: usize
         if state1.attack > 0 {
             state2.meter += state1.attack as u8;
             state1.attack = 0;
-            println!("P1 sends {} damage", lock1.sent);
+            //println!("P1 sends {} damage", lock1.sent);
         }
         if state2.attack > 0 {
             state1.meter += state2.attack as u8;
             state2.attack = 0;
-            println!("P2 sends {} damage", lock2.sent);
+            //println!("P2 sends {} damage", lock2.sent);
         }
 
         if !has_valid_moves(&state1) {
@@ -214,7 +303,7 @@ fn test_play_self() {
         .unwrap()
         .as_nanos() as u64;
 
-    self_play(seed, HachiConfig::rapid(), HachiConfig::rapid(), 2);
+    self_play(seed, HachiConfig::rapid(), HachiConfig::rapid(), 4);
 }
 
 #[test]

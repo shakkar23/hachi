@@ -13,6 +13,9 @@ use tetris::{
     bag::Bag
 };
 
+use serde::Serialize;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use rand::prelude::*;
 use rand::distributions::WeightedIndex;
 
@@ -25,6 +28,48 @@ use crate::table::{MoveTable, TableKey, TableValue};
 
 thread_local! {
     static TTABLE: RefCell<MoveTable> = RefCell::new(MoveTable::new());
+    static XORSHIFT_STATE: RefCell<u64> = RefCell::new(0x9E3779B97F4A7C15);
+    static TREE_DUMP: RefCell<TreeDump> = RefCell::new(TreeDump::new());
+}
+
+fn xorshift64() -> u64 {
+    XORSHIFT_STATE.with(|s| {
+        let mut x = *s.borrow();
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        *s.borrow_mut() = x;
+        x
+    })
+}
+
+#[derive(Serialize, Clone)]
+pub struct TreeNode {
+    pub id: u64,
+    pub parent_id: Option<u64>,
+    pub depth: usize,
+    pub gamestate_row: String,
+    pub gamestate_col: String,
+    pub value: f64
+}
+
+pub struct TreeDump {
+    pub nodes: Vec<TreeNode>,
+}
+
+impl TreeDump {
+    fn new() -> Self { Self { nodes: vec![] } }
+}
+
+pub fn drain_tree_dump() -> String {
+    TREE_DUMP.with(|d| {
+        let nodes = std::mem::take(&mut d.borrow_mut().nodes);
+        serde_json::to_string_pretty(&nodes).unwrap()
+    })
+}
+pub fn reset_tree_dump() {
+    TREE_DUMP.with(|d| *d.borrow_mut() = TreeDump::new());
+    NODE_COUNTER.store(0, Ordering::Relaxed);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -59,8 +104,8 @@ impl HachiConfig {
     pub fn rapid() -> Self {
         Self {
             max_moves: 2,
-            max_responses: 2,
-            use_exact: false,
+            max_responses: 1,
+            use_exact: true,
             beam_width: 250,
             model_type: ModelType::LightGBM_Large
         }
@@ -114,9 +159,30 @@ pub fn u64_to_piece(x:u64) -> Piece{
     }
 }
 
+static NODE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn next_node_id() -> u64 {
+    NODE_COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+pub fn solve_position(gs1: GameState, gs2: GameState, depth: usize, config: HachiConfig) -> (Move, f64) {
+    solve_position_inner(gs1, gs2, depth, config, None, true)
+}
+
 // Solve a two-board position using subgame perfect equilibrium.
 // Returns: (best_move, win_probability)
-pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, depth: usize, config: HachiConfig) -> (Move, f64) {
+fn solve_position_inner(
+    mut gamestate1: GameState, 
+    mut gamestate2: GameState, 
+    depth: usize, 
+    config: HachiConfig,
+    parent_id: Option<u64>,
+    canonical: bool
+) -> (Move, f64) {
+    
+    let node_id = next_node_id();
+    let gs1_snapshot = format!("{:#?}", if canonical { gamestate1 } else { gamestate2 });
+    let gs2_snapshot = format!("{:#?}", if canonical { gamestate2 } else { gamestate1 });
 
     let queue1 = gamestate1.queue;
     let queue2 = gamestate2.queue;
@@ -130,11 +196,21 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
 
     // check if we are dead
     if moves1.len() == 0 {
+        TREE_DUMP.with(|d| d.borrow_mut().nodes.push(TreeNode {
+            id: node_id, parent_id, depth,
+            gamestate_row: gs1_snapshot, gamestate_col: gs2_snapshot,
+            value: 0.0,
+        }));
         return (default_move(), 0.0);
     }
 
     // check if they are dead
     if moves2.len() == 0 {
+        TREE_DUMP.with(|d| d.borrow_mut().nodes.push(TreeNode {
+            id: node_id, parent_id, depth,
+            gamestate_row: gs1_snapshot, gamestate_col: gs2_snapshot,
+            value: 1.0,
+        }));
         return (moves1[0], 1.0);
     }
 
@@ -152,7 +228,7 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
         gs.queue.rotate_left(1);
 
         // cheeky pseudo rng - monte carlo speculation
-        gs.queue[4] = u64_to_piece(gs.board.cols.iter().sum::<u64>() % 7);
+        gs.queue[4] = u64_to_piece(xorshift64() % 7);
 
         let next_meter = gs.meter.saturating_sub(lock.sent);
         gs.attack = lock.sent - gs.meter.abs_diff(next_meter);
@@ -235,12 +311,13 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                 chance_state: &ChanceState, 
                 opponent_index: usize, 
                 opponent_states: &Vec<ChanceState>,
-                opponent_features: &Vec<Option<Features>>| {
+                opponent_features: &Vec<Option<Features>>,
+                flip: bool| {
 
-                let realized_states: Vec<GameState> = (5..6).map(
+                let realized_states: Vec<GameState> = [xorshift64() % 10; 1].iter().map(
                         |k| {
                             let mut gs = chance_state.gamestate.clone();
-                            gs.tank_garbage(chance_state.garbage, k);
+                            gs.tank_garbage(chance_state.garbage, *k as usize);
                             // take incoming damage into meter
                             gs.meter += opponent_states[opponent_index].gamestate.attack;
                             gs
@@ -264,11 +341,13 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                 } else {
                     // use subgame payoff
                     realized_states.iter().fold(0.0, |accum, &gamestate| {
-                        let (_, value) = solve_position(
+                        let (_, value) = solve_position_inner(
                             gamestate, 
                             opponent_states[opponent_index].gamestate,
                             depth - 1,
-                            config
+                            config,
+                            Some(node_id),
+                            canonical ^ flip
                         );
                         accum + value
                     }) / 10.0
@@ -287,11 +366,13 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                 if depth == 1 {
                     eval(row_features[i].as_ref().unwrap(), col_features[j].as_ref().unwrap(), config.model_type)
                 } else {
-                    let (_, value) = solve_position(
+                    let (_, value) = solve_position_inner(
                         row_states[i].gamestate, 
                         col_states[j].gamestate,
                         depth - 1,
-                        config
+                        config,
+                        Some(node_id),
+                        canonical
                     );
                     value
                 }
@@ -300,13 +381,13 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                 
                 // println!("row player is tanking");
                 // row player has a chance state
-                get_average_payoff(&row_states[i], j, &col_states, &col_features)
+                get_average_payoff(&row_states[i], j, &col_states, &col_features, false)
             }
             else if col_states[j].garbage != 0 {
                 // col player has a chance state
                 // subtract from 1 to get row's score
                 // println!("col player is tanking");
-                1.0 - get_average_payoff(&col_states[j], i, &row_states, &row_features)
+                1.0 - get_average_payoff(&col_states[j], i, &row_states, &row_features, true)
             }
             else {
                 // no chance state, but interaction exists
@@ -336,11 +417,13 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                         config.model_type,
                     )
                 } else {
-                    let (_, v) = solve_position(
+                    let (_, v) = solve_position_inner(
                         winner.gamestate.clone(),
                         loser_state,
                         depth - 1,
                         config,
+                        Some(node_id),
+                        canonical ^ (!row_wins)
                     );
                     v
                 };
@@ -353,12 +436,18 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
     }
 
     // calculate best strategy and win expectation
-
     let (row_strategy, _, value) = if config.use_exact {
         nash_equilibrium_exact(&payoffs) // 200 microseconds.
     } else {
         nash_equilibrium(&payoffs) // 20 microseconds.
     };
+    let display_payoffs: Vec<Vec<f64>> = payoffs.iter()
+    .map(|row| row.iter().map(|&v| if canonical { v } else { 1.0 - v }).collect())
+    .collect();
+    println!("depth {}", depth);
+    println!("payoffs {:?}", display_payoffs);
+    println!("row player? {}", canonical);
+    println!("value {}", if canonical { value } else { 1.0 - value });
 
     // execute mixed strategy
 
@@ -366,6 +455,17 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
     let mut rng = thread_rng();
 
     let selected_index = dist.sample(&mut rng);
+
+    TREE_DUMP.with(|d| {
+        d.borrow_mut().nodes.push(TreeNode {
+            id: node_id,
+            parent_id,
+            depth,
+            gamestate_row: gs1_snapshot,
+            gamestate_col: gs2_snapshot,
+            value: if canonical { value } else { 1.0 - value },
+        });
+    });
 
     (moves1[selected_index], value)
 }
