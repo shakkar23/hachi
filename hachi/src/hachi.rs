@@ -199,7 +199,7 @@ fn solve_position_inner(
         TREE_DUMP.with(|d| d.borrow_mut().nodes.push(TreeNode {
             id: node_id, parent_id, depth,
             gamestate_row: gs1_snapshot, gamestate_col: gs2_snapshot,
-            value: 0.0,
+            value: if canonical { 0.0 } else { 1.0 },
         }));
         return (default_move(), 0.0);
     }
@@ -209,7 +209,7 @@ fn solve_position_inner(
         TREE_DUMP.with(|d| d.borrow_mut().nodes.push(TreeNode {
             id: node_id, parent_id, depth,
             gamestate_row: gs1_snapshot, gamestate_col: gs2_snapshot,
-            value: 1.0,
+            value: if canonical { 1.0 } else { 0.0 },
         }));
         return (moves1[0], 1.0);
     }
@@ -337,7 +337,7 @@ fn solve_position_inner(
                             opponent_features[opponent_index].as_ref().unwrap(),
                             config.model_type
                         )
-                    }) / 10.0
+                    }) / (realized_states.len() as f64)
                 } else {
                     // use subgame payoff
                     realized_states.iter().fold(0.0, |accum, &gamestate| {
@@ -350,7 +350,7 @@ fn solve_position_inner(
                             canonical ^ flip
                         );
                         accum + value
-                    }) / 10.0
+                    }) / (realized_states.len() as f64)
                 }
             };
 

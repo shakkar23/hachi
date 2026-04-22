@@ -2,41 +2,48 @@
 """
 Visualize a hachi game-tree dump.
 
+Renders the entire tree to a PNG using Pillow, then opens a GUI that
+pans/zooms that image.
+
 Usage:
-    python visualize_tree.py dump.json
+    python visualize_tree.py dump.json [--out tree.png] [--no-gui]
 
 Controls:
     Drag          pan
     Scroll        zoom
     R             reset view
 """
+import argparse
 import json
 import re
-import sys
-import tkinter as tk
 from collections import defaultdict
+
+from PIL import Image, ImageDraw, ImageFont
 
 BOARD_W = 10
 BOARD_H = 20
 
 # ---- sizing ----
-CELL = 5                       # base pixels per board cell
-BOARD_PX_W = BOARD_W * CELL    # 50
-BOARD_PX_H = BOARD_H * CELL    # 100
+CELL = 5
+BOARD_PX_W = BOARD_W * CELL
+BOARD_PX_H = BOARD_H * CELL
 GAP = 8
 NODE_W = BOARD_PX_W * 2 + GAP + 20
 NODE_H = BOARD_PX_H + 38
 H_SPACING = 32
 V_SPACING = 60
+MARGIN = 40
 
-# ---- colors ----
-BG       = "#f4f4f4"
-NODE_BG  = "#ffffff"
-EDGE     = "#999999"
-FRAME    = "#777777"
-EMPTY    = "#e8e8e8"
-ROW_FILL = "#3a8dde"
-COL_FILL = "#e04a4a"
+# ---- colors (RGB) ----
+BG       = (244, 244, 244)
+NODE_BG  = (255, 255, 255)
+EDGE     = (153, 153, 153)
+FRAME    = (119, 119, 119)
+EMPTY    = (232, 232, 232)
+ROW_FILL = (58, 141, 222)
+COL_FILL = (224, 74, 74)
+POS_COL  = (26, 158, 58)
+NEG_COL  = (201, 48, 44)
 
 
 COLS_RE = re.compile(r"cols:\s*\[([^\]]+)\]", re.S)
@@ -102,73 +109,140 @@ def layout(nodes):
 
 
 # ----------------------------------------------------------------------
-# Board -> PhotoImage at base scale (CELL px per cell)
+# Pillow rendering
 # ----------------------------------------------------------------------
-def build_board_image(cols, fill_color):
-    img = tk.PhotoImage(width=BOARD_PX_W, height=BOARD_PX_H)
-    rows = []
+def draw_board(draw, ox, oy, cols, fill_color):
     for y in range(BOARD_H):
         bit = BOARD_H - 1 - y
-        row_cells = []
         for x in range(BOARD_W):
             color = fill_color if (cols[x] >> bit) & 1 else EMPTY
-            row_cells.extend([color] * CELL)
-        row_str = "{" + " ".join(row_cells) + "}"
-        rows.extend([row_str] * CELL)
-    img.put(" ".join(rows), to=(0, 0))
+            x0 = ox + x * CELL
+            y0 = oy + y * CELL
+            draw.rectangle([x0, y0, x0 + CELL - 1, y0 + CELL - 1], fill=color)
+    draw.rectangle([ox, oy, ox + BOARD_PX_W, oy + BOARD_PX_H],
+                   outline=FRAME, width=1)
+
+
+def get_font(size):
+    for name in ("DejaVuSans-Bold.ttf", "Arial Bold.ttf", "Helvetica-Bold.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except (OSError, IOError):
+            continue
+    try:
+        return ImageFont.truetype("DejaVuSans.ttf", size)
+    except (OSError, IOError):
+        return ImageFont.load_default()
+
+
+def render_tree(nodes):
+    by_id, children, pos = layout(nodes)
+
+    max_x = max(x for x, _ in pos.values()) + NODE_W
+    max_y = max(y for _, y in pos.values()) + NODE_H
+    W = int(max_x + 2 * MARGIN)
+    H = int(max_y + 2 * MARGIN)
+
+    img = Image.new("RGB", (W, H), BG)
+    draw = ImageDraw.Draw(img)
+    font = get_font(11)
+
+    # edges first so nodes overlay them
+    for pid, kids in children.items():
+        if pid not in pos:
+            continue
+        px, py = pos[pid]
+        parent_cx = px + NODE_W / 2 + MARGIN
+        parent_by = py + NODE_H + MARGIN
+        for k in kids:
+            kx, ky = pos[k]
+            child_cx = kx + NODE_W / 2 + MARGIN
+            child_ty = ky + MARGIN
+            draw.line([parent_cx, parent_by, child_cx, child_ty],
+                      fill=EDGE, width=1)
+
+    for nid, (x, y) in pos.items():
+        node = by_id[nid]
+        x += MARGIN
+        y += MARGIN
+        draw.rectangle([x, y, x + NODE_W, y + NODE_H],
+                       fill=NODE_BG, outline=FRAME, width=1)
+
+        row_cols = parse_cols(node["gamestate_row"])
+        col_cols = parse_cols(node["gamestate_col"])
+
+        draw_board(draw, x + 10, y + 6, row_cols, ROW_FILL)
+        draw_board(draw, x + 10 + BOARD_PX_W + GAP, y + 6, col_cols, COL_FILL)
+
+        val = node["value"]
+        color = POS_COL if val > 0.5 else NEG_COL
+        label = f"v = {val:+.3f}"
+        bbox = draw.textbbox((0, 0), label, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        tx = x + NODE_W / 2 - tw / 2
+        ty = y + BOARD_PX_H + 14 - th / 2
+        draw.text((tx, ty), label, fill=color, font=font)
+
     return img
 
 
 # ----------------------------------------------------------------------
-# Rendering
+# Tk viewer: pan/zoom a single PIL image
 # ----------------------------------------------------------------------
-class TreeView:
-    def __init__(self, root, nodes):
-        self.by_id, self.children, self.pos = layout(nodes)
+class ImageViewer:
+    def __init__(self, root, pil_img):
+        self.root = root
+        self.base = pil_img
+        self._zoom_levels = [1/8, 1/6, 1/4, 1/3, 1/2, 2/3, 1.0,
+                             1.5, 2.0, 3.0, 4.0, 6.0, 8.0]
 
-        self.canvas = tk.Canvas(
-            root, bg=BG, highlightthickness=0,
-            xscrollincrement=1, yscrollincrement=1,
-        )
+        # Start at a zoom that fits roughly the initial window width.
+        fit = 1400 / pil_img.width if pil_img.width else 1.0
+        self._zoom_idx = min(range(len(self._zoom_levels)),
+                             key=lambda i: abs(self._zoom_levels[i] - fit))
+        self.scale = self._zoom_levels[self._zoom_idx]
+
+        self.canvas = tk.Canvas(root, bg="#f4f4f4", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
 
-        xs = [p[0] for p in self.pos.values()]
-        ys = [p[1] for p in self.pos.values()]
-        pad = 100
-        self.canvas.configure(scrollregion=(
-            min(xs) - pad,
-            min(ys) - pad,
-            max(xs) + NODE_W + pad,
-            max(ys) + NODE_H + pad,
-        ))
-
-        # Cache: (cols_tuple, color) -> base PhotoImage (shared across nodes)
-        self._base_img_cache = {}
-        # Currently-displayed scaled variant per key
-        self._scaled_img_cache = {}
-        # (item_id, key) pairs so we can swap images on zoom
-        self._image_items = []
-        # (item_id, base_font_size) pairs so we can rescale text on zoom
-        self._text_items = []
-
-        # Discrete zoom levels. 1.0 = base. Keep sorted ascending.
-        # Fractional entries use subsample; integers use zoom.
-        self._zoom_levels = [1/4, 1/3, 1/2, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0]
-        self._zoom_idx = self._zoom_levels.index(1.0)
-        self.scale = 1.0
-
-        self._draw()
+        self._tk_img = None
+        self._img_id = None
+        self._redraw()
 
         self.canvas.bind("<ButtonPress-1>", self._on_press)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<MouseWheel>", self._zoom)
-        self.canvas.bind("<Button-4>", lambda e: self._zoom_step(e, 1.1))
-        self.canvas.bind("<Button-5>", lambda e: self._zoom_step(e, 1 / 1.1))
+        self.canvas.bind("<Button-4>", lambda e: self._zoom_step(e, +1))
+        self.canvas.bind("<Button-5>", lambda e: self._zoom_step(e, -1))
+        root.bind("r", lambda e: self._reset())
+        root.bind("R", lambda e: self._reset())
 
-        root.bind("r", lambda e: self._reset_view())
-        root.bind("R", lambda e: self._reset_view())
+    def _redraw(self, anchor_canvas=None, anchor_img=None):
+        w = max(1, int(self.base.width * self.scale))
+        h = max(1, int(self.base.height * self.scale))
+        resample = Image.NEAREST if self.scale >= 1 else Image.BILINEAR
+        resized = self.base.resize((w, h), resample)
+        self._tk_img = ImageTk.PhotoImage(resized)
 
-    # -- interaction ----------------------------------------------------
+        if self._img_id is None:
+            self._img_id = self.canvas.create_image(0, 0, anchor="nw",
+                                                    image=self._tk_img)
+        else:
+            self.canvas.itemconfigure(self._img_id, image=self._tk_img)
+
+        self.canvas.configure(scrollregion=(0, 0, w, h))
+
+        if anchor_canvas is not None and anchor_img is not None:
+            target_x = anchor_img[0] * self.scale
+            target_y = anchor_img[1] * self.scale
+            new_origin_x = target_x - anchor_canvas[0]
+            new_origin_y = target_y - anchor_canvas[1]
+            if w > 0:
+                self.canvas.xview_moveto(max(0, new_origin_x) / w)
+            if h > 0:
+                self.canvas.yview_moveto(max(0, new_origin_y) / h)
+
     def _on_press(self, e):
         self._drag = (e.x, e.y)
 
@@ -180,161 +254,65 @@ class TreeView:
         self._drag = (e.x, e.y)
 
     def _zoom(self, event):
-        direction = 1 if event.delta > 0 else -1
-        self._zoom_to(event, direction)
+        self._zoom_step(event, +1 if event.delta > 0 else -1)
 
-    def _zoom_step(self, event, factor):
-        direction = 1 if factor > 1 else -1
-        self._zoom_to(event, direction)
-
-    def _zoom_to(self, event, direction):
-        new_idx = max(0, min(len(self._zoom_levels) - 1, self._zoom_idx + direction))
+    def _zoom_step(self, event, direction):
+        new_idx = max(0, min(len(self._zoom_levels) - 1,
+                             self._zoom_idx + direction))
         if new_idx == self._zoom_idx:
             return
-        new_scale = self._zoom_levels[new_idx]
-        factor = new_scale / self.scale
-        x = self.canvas.canvasx(event.x)
-        y = self.canvas.canvasy(event.y)
-        self.canvas.scale("all", x, y, factor, factor)
-        self.scale = new_scale
-        self._zoom_idx = new_idx
-        self._update_image_scale()
-        self._update_text_scale()
-        self._update_scrollregion()
+        cx = self.canvas.canvasx(event.x)
+        cy = self.canvas.canvasy(event.y)
+        ix = cx / self.scale
+        iy = cy / self.scale
 
-    def _reset_view(self):
-        if self.scale != 1.0:
-            factor = 1.0 / self.scale
-            self.canvas.scale("all", 0, 0, factor, factor)
-            self.scale = 1.0
+        self._zoom_idx = new_idx
+        self.scale = self._zoom_levels[new_idx]
+        self._redraw(anchor_canvas=(event.x, event.y), anchor_img=(ix, iy))
+
+    def _reset(self):
+        if 1.0 in self._zoom_levels:
             self._zoom_idx = self._zoom_levels.index(1.0)
-            self._update_image_scale()
-            self._update_text_scale()
-            self._update_scrollregion()
+        else:
+            self._zoom_idx = len(self._zoom_levels) // 2
+        self.scale = self._zoom_levels[self._zoom_idx]
+        self._redraw()
         self.canvas.xview_moveto(0)
         self.canvas.yview_moveto(0)
 
-    def _update_scrollregion(self):
-        bbox = self.canvas.bbox("all")
-        if bbox is None:
-            return
-        pad = 100
-        x1, y1, x2, y2 = bbox
-        self.canvas.configure(scrollregion=(x1 - pad, y1 - pad, x2 + pad, y2 + pad))
 
-    # -- image scaling --------------------------------------------------
-    def _get_scaled(self, key):
-        """Return a PhotoImage for `key` at current zoom level."""
-        cached = self._scaled_img_cache.get(key)
-        if cached is not None:
-            return cached
-
-        base = self._base_img_cache[key]
-        s = self.scale
-        if s == 1.0:
-            img = base
-        elif s > 1.0:
-            img = base.zoom(int(round(s)), int(round(s)))
-        else:
-            img = base.subsample(int(round(1.0 / s)), int(round(1.0 / s)))
-        self._scaled_img_cache[key] = img
-        return img
-
-    def _update_image_scale(self):
-        self._scaled_img_cache.clear()
-        for item_id, key in self._image_items:
-            img = self._get_scaled(key)
-            self.canvas.itemconfigure(item_id, image=img)
-
-    def _update_text_scale(self):
-        for item_id, base_size in self._text_items:
-            new_size = max(1, int(round(base_size * self.scale)))
-            # Font spec: use current font family/weight, swap size.
-            current = self.canvas.itemcget(item_id, "font")
-            parts = current.rsplit(" ", 2)  # "family size weight" or similar
-            if len(parts) == 3 and parts[1].lstrip("-").isdigit():
-                new_font = f"{parts[0]} {new_size} {parts[2]}"
-            else:
-                new_font = ("Helvetica", new_size, "bold")
-            self.canvas.itemconfigure(item_id, font=new_font)
-
-    # -- drawing --------------------------------------------------------
-    def _get_base(self, cols, color):
-        key = (cols, color)
-        if key not in self._base_img_cache:
-            self._base_img_cache[key] = build_board_image(cols, color)
-        return key
-
-    def _draw(self):
-        for pid, kids in self.children.items():
-            if pid not in self.pos:
-                continue
-            px, py = self.pos[pid]
-            parent_cx = px + NODE_W / 2
-            for k in kids:
-                kx, ky = self.pos[k]
-                child_cx = kx + NODE_W / 2
-                self.canvas.create_line(
-                    parent_cx, py + NODE_H,
-                    child_cx, ky,
-                    fill=EDGE, width=1,
-                )
-
-        for nid, (x, y) in self.pos.items():
-            self._draw_node(nid, x, y)
-
-    def _draw_node(self, nid, x, y):
-        node = self.by_id[nid]
-        self.canvas.create_rectangle(
-            x, y, x + NODE_W, y + NODE_H,
-            fill=NODE_BG, outline=FRAME,
-        )
-
-        row_cols = parse_cols(node["gamestate_row"])
-        col_cols = parse_cols(node["gamestate_col"])
-
-        key_row = self._get_base(row_cols, ROW_FILL)
-        key_col = self._get_base(col_cols, COL_FILL)
-
-        img_row = self._get_scaled(key_row)
-        img_col = self._get_scaled(key_col)
-
-        item_row = self.canvas.create_image(x + 10, y + 6, anchor="nw", image=img_row)
-        self._image_items.append((item_row, key_row))
-        self.canvas.create_rectangle(
-            x + 10, y + 6, x + 10 + BOARD_PX_W, y + 6 + BOARD_PX_H,
-            outline=FRAME,
-        )
-
-        x2 = x + 10 + BOARD_PX_W + GAP
-        item_col = self.canvas.create_image(x2, y + 6, anchor="nw", image=img_col)
-        self._image_items.append((item_col, key_col))
-        self.canvas.create_rectangle(
-            x2, y + 6, x2 + BOARD_PX_W, y + 6 + BOARD_PX_H,
-            outline=FRAME,
-        )
-
-        val = node["value"]
-        color = "#1a9e3a" if val > 0.5 else "#c9302c"
-        label = f"v = {val:+.3f}"
-        base_font_size = 10
-        text_id = self.canvas.create_text(
-            x + NODE_W / 2, y + BOARD_PX_H + 24,
-            text=label, fill=color,
-            font=("Helvetica", base_font_size, "bold"),
-        )
-        self._text_items.append((text_id, base_font_size))
-
-
+# ----------------------------------------------------------------------
+# Main
+# ----------------------------------------------------------------------
 def main():
-    path = sys.argv[1] if len(sys.argv) > 1 else "dump.json"
-    with open(path) as f:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("dump", nargs="?", default="dump.json")
+    ap.add_argument("--out", default=None,
+                    help="PNG output path (default: <dump>.png)")
+    ap.add_argument("--no-gui", action="store_true")
+    args = ap.parse_args()
+
+    with open(args.dump) as f:
         nodes = json.load(f)
 
+    img = render_tree(nodes)
+    out = args.out or args.dump.rsplit(".", 1)[0] + ".png"
+    img.save(out)
+    print(f"saved {out} ({img.width}x{img.height})")
+
+    if args.no_gui:
+        return
+
+    import tkinter as tk
+    from PIL import ImageTk  # noqa: F401 — used by ImageViewer
+
+    globals()["tk"] = tk
+    globals()["ImageTk"] = ImageTk
+
     root = tk.Tk()
-    root.title(f"hachi tree — {path}")
+    root.title(f"hachi tree — {args.dump}")
     root.geometry("1400x900")
-    TreeView(root, nodes)
+    ImageViewer(root, img)
     root.mainloop()
 
 
