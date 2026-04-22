@@ -53,6 +53,7 @@ impl MoveTable {
     }
 
     pub fn put(&mut self, key: &TableKey, value: TableValue){
+        return;
         self.map.insert(hash(key), value);
     }
 }

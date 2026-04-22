@@ -53,7 +53,7 @@ fn bench_solve_position(c: &mut Criterion) {
     let mut group = c.benchmark_group("hachi");
     group.sample_size(10);
     group.bench_function("solve_position", |b| {
-        b.iter(|| solve_position(black_box(state1), black_box(state2), 4, HachiConfig::rapid()))
+        b.iter(|| solve_position(black_box(state1), black_box(state2), 1, HachiConfig::rapid()))
     });
 
     group.finish();

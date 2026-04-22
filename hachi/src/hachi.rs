@@ -31,6 +31,7 @@ thread_local! {
 pub struct HachiConfig {
     pub max_moves: usize,
     pub max_responses: usize,
+    pub beam_width: usize,
     pub use_exact: bool,
     pub model_type: ModelType
 }
@@ -48,6 +49,7 @@ impl Default for HachiConfig {
             max_moves: 4,
             max_responses: 4,
             use_exact: false,
+            beam_width: 150,
             model_type: ModelType::LightGBM_Large
         }
     }
@@ -59,6 +61,7 @@ impl HachiConfig {
             max_moves: 2,
             max_responses: 2,
             use_exact: false,
+            beam_width: 150,
             model_type: ModelType::LightGBM_Large
         }
     }
@@ -67,6 +70,16 @@ impl HachiConfig {
             max_moves: 1,
             max_responses: 1,
             use_exact: false,
+            beam_width: 150,
+            model_type: ModelType::LightGBM_Large
+        }
+    }
+    pub fn beam_narrow() -> Self {
+        Self {
+            max_moves: 1,
+            max_responses: 1,
+            use_exact: false,
+            beam_width: 100,
             model_type: ModelType::LightGBM_Large
         }
     }
@@ -112,8 +125,8 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
     let state2:State = gamestate_to_state(&gamestate2);
 
     // 20ms here
-    let moves1 = get_pruned_moves(&state1, &queue1, config.max_moves);
-    let moves2 = get_pruned_moves(&state2, &queue2, config.max_responses);
+    let moves1 = get_pruned_moves(&state1, &queue1, config.max_moves, config.beam_width);
+    let moves2 = get_pruned_moves(&state2, &queue2, config.max_responses, config.beam_width);
 
     // check if we are dead
     if moves1.len() == 0 {
@@ -224,7 +237,7 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
                 opponent_states: &Vec<ChanceState>,
                 opponent_features: &Vec<Option<Features>>| {
 
-                let realized_states: Vec<GameState> = (0..10).map(
+                let realized_states: Vec<GameState> = (5..6).map(
                         |k| {
                             let mut gs = chance_state.gamestate.clone();
                             gs.tank_garbage(chance_state.garbage, k);
@@ -358,7 +371,7 @@ pub fn solve_position(mut gamestate1: GameState, mut gamestate2: GameState, dept
 }
 
 
-pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move> {
+pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n: usize, w: usize) -> Vec<Move> {
     let key = TableKey { 
         state: state, 
         piece: queue[0] 
@@ -378,7 +391,7 @@ pub fn get_pruned_moves(state: &State, queue: &[Piece; 5], n:usize) -> Vec<Move>
                 queue,
                 Weights::default(),
                 BotConfigs {
-                    width: 150
+                    width: w
                 },
                 n
             );
