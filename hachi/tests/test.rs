@@ -140,11 +140,11 @@ fn self_play(seed: u64, config1: HachiConfig, config2: HachiConfig, depth: usize
         //println!("P1 meter: {}, P2 meter: {}", state1.meter, state2.meter);
 
         let (mv1, eval1) = solve_position(state1, state2, depth, config1);
-        //println!("P1 eval: {}", eval1);
         let mut lock1 = apply_move_to_gamestate(&mut state1, &mv1);
         //println!("P1 clears: {}", lock1.cleared);
 
         let (mv2, eval2) = solve_position(state2, state1, depth, config2);
+        println!("P1 eval: {}", eval1);
         //println!("P2 eval: {}", eval2);
         let mut lock2 = apply_move_to_gamestate(&mut state2, &mv2);
         //println!("P2 clears: {}", lock2.cleared);
@@ -159,32 +159,32 @@ fn self_play(seed: u64, config1: HachiConfig, config2: HachiConfig, depth: usize
 
         if state1.meter > 0 && state1.combo == 0 {
             state1.tank_garbage(state1.meter as u32, next() as usize % 10);
-            //println!("P1 tanks {} garbage", state1.meter);
+            println!("P1 tanks {} garbage", state1.meter);
             state1.meter = 0;
         }
         if state2.meter > 0 && state2.combo == 0 {
             state2.tank_garbage(state2.meter as u32, next() as usize % 10);
-            //println!("P2 tanks {} garbage", state2.meter);
+            println!("P2 tanks {} garbage", state2.meter);
             state2.meter = 0;
         }
 
         if state1.attack > state2.attack {
             state1.attack -= state2.attack;
-            state2.attack = 0;
+            state1.attack = 2;
         } else {
             state2.attack -= state1.attack;
-            state2.attack = 0;
+            state1.attack = 0;
         }
 
         if state1.attack > 0 {
             state2.meter += state1.attack as u8;
             state1.attack = 0;
-            //println!("P1 sends {} damage", lock1.sent);
+            println!("P1 sends {} damage", lock1.sent);
         }
         if state2.attack > 0 {
             state1.meter += state2.attack as u8;
             state2.attack = 0;
-            //println!("P2 sends {} damage", lock2.sent);
+            println!("P2 sends {} damage", lock2.sent);
         }
 
         if !has_valid_moves(&state1) {

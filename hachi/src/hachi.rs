@@ -61,7 +61,7 @@ impl HachiConfig {
             max_moves: 2,
             max_responses: 2,
             use_exact: false,
-            beam_width: 150,
+            beam_width: 250,
             model_type: ModelType::LightGBM_Large
         }
     }
@@ -70,7 +70,7 @@ impl HachiConfig {
             max_moves: 1,
             max_responses: 1,
             use_exact: false,
-            beam_width: 150,
+            beam_width: 250,
             model_type: ModelType::LightGBM_Large
         }
     }
